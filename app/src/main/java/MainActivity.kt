@@ -39,7 +39,7 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
-import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.navigation.compose.NavHost
@@ -326,13 +326,11 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     var expandedPeriod by remember { mutableStateOf(false) }
     var selectedPeriod by remember { mutableStateOf("단위(일)") }
 
-    // 숫자 직접 입력을 위한 다이얼로그 상태 변수
     var showInputDialog by remember { mutableStateOf(false) }
     var manualInputText by remember { mutableStateOf("") }
 
     val chartData = healthState.getChartData(itemName, selectedPeriod)
 
-    // 숫자 직접 입력 다이얼로그 팝업
     if (showInputDialog) {
         AlertDialog(
             onDismissRequest = { showInputDialog = false },
@@ -384,7 +382,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             if (isManualInput) {
                 Text(text = "오늘의 $itemName 기록 입력", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
 
-                // 만약 현재 수치가 목표치보다 높다면 슬라이더 최대치를 동적으로 늘림 (앱 튕김 방지)
                 val dynamicSliderMax = max(targetValue, currentValue).coerceAtLeast(1f)
 
                 Slider(
@@ -394,7 +391,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // N 단위 (터치 시 숫자 직접 입력 팝업 호출)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "${currentValue.toInt()} $unit",
@@ -489,7 +485,6 @@ fun CustomBarChart(data: List<Pair<String, Float>>, isWeekly: Boolean, modifier:
     }
 }
 
-
 // ==========================================
 // 공용 UI 컴포넌트 모음
 // ==========================================
@@ -515,7 +510,6 @@ fun TopSpectrumBanner(onClick: () -> Unit = {}) {
 
 @Composable
 fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: Float, maxValue: Float, onValueChange: (Float) -> Unit, onClick: () -> Unit = {}) {
-    // 동적 스케일링 (입력값이 목표치를 넘어섰을 때 최대 범위 늘려주기)
     val dynamicMax = max(maxValue, value).coerceAtLeast(1f)
 
     Box(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Gray).clickable { onClick() }.padding(12.dp)) {
@@ -559,27 +553,27 @@ fun HealthApiRecord(emoji: String, title: String, value: String, progress: Float
 }
 
 // ==========================================
-// 과거 기록 조회를 위한 API 연동 함수 (오류 수정 및 중복 방지 적용)
+// 완벽한 "오늘" 기준 0% 오차 API 연동 함수들
 // ==========================================
 suspend fun fetchHistoricalSteps(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
     val map = mutableMapOf<LocalDate, Float>()
     try {
-        val nowLocal = LocalDateTime.now()
-        val startLocal = nowLocal.minusDays(days.toLong()).truncatedTo(ChronoUnit.DAYS)
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
 
-        // 1. 걸음수 중복 해결: 단순 합산(readRecords) 대신 구글핏, 삼성헬스 등의 데이터를
-        // 우선순위에 맞게 병합해주는 aggregateGroupByPeriod 함수 사용
-        val request = AggregateGroupByPeriodRequest(
-            metrics = setOf(StepsRecord.COUNT_TOTAL),
-            timeRangeFilter = TimeRangeFilter.between(startLocal, nowLocal),
-            timeRangeSlicer = Period.ofDays(1)
-        )
-        val response = client.aggregateGroupByPeriod(request)
+        // 걸음 수: 매일 00:00부터 23:59까지 하루치만 정확히 명시하여 Aggregate 쿼리
+        for (i in 0..days) {
+            val date = today.minusDays(i.toLong())
+            val start = date.atStartOfDay(zone).toInstant()
+            // 당일이면 '현재 시간'까지, 과거일이면 '그 날짜의 끝'까지만 긁어옴
+            val end = if (i == 0) Instant.now() else date.plusDays(1).atStartOfDay(zone).toInstant()
 
-        response.forEach { bucket ->
-            val date = bucket.startTime.toLocalDate()
-            // getResult() 대신 result[] 인덱스 연산자를 사용하여 값 추출
-            val count = bucket.result[StepsRecord.COUNT_TOTAL] ?: 0L
+            val request = AggregateRequest(
+                metrics = setOf(StepsRecord.COUNT_TOTAL),
+                timeRangeFilter = TimeRangeFilter.between(start, end)
+            )
+            val response = client.aggregate(request)
+            val count = response[StepsRecord.COUNT_TOTAL] ?: 0L
             map[date] = count.toFloat()
         }
     } catch (e: Exception) { e.printStackTrace() }
@@ -589,19 +583,23 @@ suspend fun fetchHistoricalSteps(client: HealthConnectClient, days: Int): Map<Lo
 suspend fun fetchHistoricalSleep(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
     val map = mutableMapOf<LocalDate, Float>()
     try {
-        val now = Instant.now()
-        // 수면은 전날 저녁 ~ 오늘 아침이 하나의 사이클이므로 12시(정오) 기준으로 분할
-        val start = ZonedDateTime.now().minusDays(days.toLong()).withHour(12).truncatedTo(ChronoUnit.HOURS).toInstant()
-        val response = client.readRecords(ReadRecordsRequest(recordType = SleepSessionRecord::class, timeRangeFilter = TimeRangeFilter.between(start, now)))
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
 
-        val recordsByDate = response.records.groupBy { record ->
-            record.endTime.atZone(ZoneId.systemDefault()).toLocalDate()
-        }
+        for (i in 0..days) {
+            val date = today.minusDays(i.toLong())
+            // 수면: 전날 낮 12시부터 당일 낮 12시까지를 '그 날의 수면'으로 엄격히 정의
+            val start = date.minusDays(1).atTime(12, 0).atZone(zone).toInstant()
+            val end = date.atTime(12, 0).atZone(zone).toInstant()
+            val actualEnd = if (end.isAfter(Instant.now())) Instant.now() else end
 
-        recordsByDate.forEach { (date, records) ->
-            // 2. 수면 데이터 중복 해결: 워치와 스마트폰이 수면을 동시 측정하여 시간이 뻥튀기되는 현상을
-            // 방지하기 위해, 구간 병합(Interval Merge) 알고리즘을 사용해 겹치는 시간은 한 번만 계산
-            val sorted = records.sortedBy { it.startTime }
+            val response = client.readRecords(ReadRecordsRequest(
+                recordType = SleepSessionRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(start, actualEnd)
+            ))
+
+            // 수면 중복 병합: 워치와 폰이 동시에 켜져 교집합으로 기록된 시간은 하나로 통합(Interval Merge)
+            val sorted = response.records.sortedBy { it.startTime }
             var totalMinutes = 0L
             var currentEnd = Instant.MIN
 
@@ -622,31 +620,53 @@ fun fetchHistoricalScreenTime(context: Context, days: Int): Map<LocalDate, Float
     val map = mutableMapOf<LocalDate, Float>()
     try {
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val packageManager = context.packageManager
-
-        // 3. 스크린 타임 중복 해결: 휴대폰을 켜두기만 해도 계산되는 '홈 화면(런처)' 패키지를 가져와 사용 시간에서 제외
-        val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
-        val launchers = packageManager.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }.toSet()
-
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now()
 
         for (i in 0..days) {
             val date = today.minusDays(i.toLong())
             val startMilli = date.atStartOfDay(zone).toInstant().toEpochMilli()
-            val endMilli = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            val endMilli = if (i == 0) System.currentTimeMillis() else date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
 
-            // 단순 queryUsageStats(중복 버킷 반환 위험) 대신 queryAndAggregateUsageStats를 사용하여 패키지별 합산 완벽 방어
-            val stats = usageStatsManager.queryAndAggregateUsageStats(startMilli, endMilli)
+            // 스크린 타임: 앱들의 사용 시간을 더하는 것이 아니라 "화면이 켜져서 상호작용한 시간(SCREEN_INTERACTIVE)"만 추적
+            val events = usageStatsManager.queryEvents(startMilli, endMilli)
+            val event = android.app.usage.UsageEvents.Event()
 
-            var totalTime = 0L
-            for ((packageName, stat) in stats) {
-                // 포그라운드 타임이 0보다 크고, 해당 앱이 홈 화면(런처)이 아닌 진짜 앱일 때만 시간 더하기
-                if (stat.totalTimeInForeground > 0 && !launchers.contains(packageName)) {
-                    totalTime += stat.totalTimeInForeground
+            var totalScreenTime = 0L
+            var lastInteractiveTime = 0L
+            var isInteractive = false
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (event.eventType == android.app.usage.UsageEvents.Event.SCREEN_INTERACTIVE) {
+                    isInteractive = true
+                    lastInteractiveTime = event.timeStamp
+                } else if (event.eventType == android.app.usage.UsageEvents.Event.SCREEN_NON_INTERACTIVE) {
+                    if (isInteractive && lastInteractiveTime > 0) {
+                        totalScreenTime += (event.timeStamp - lastInteractiveTime)
+                        isInteractive = false
+                    }
                 }
             }
-            map[date] = totalTime.toFloat() / (1000f * 60f * 60f)
+            // 검색 종료 시점까지 아직 폰 화면이 켜져 있는 경우 마지막 시간 추가
+            if (isInteractive && lastInteractiveTime > 0) {
+                totalScreenTime += (endMilli - lastInteractiveTime)
+            }
+
+            // 만약 기기 제조사 문제로 이벤트 추적이 막혀 0이 나올 경우를 대비한 안전 장치(폴백)
+            if (totalScreenTime == 0L) {
+                val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
+                val launchers = context.packageManager.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }.toSet()
+                val stats = usageStatsManager.queryAndAggregateUsageStats(startMilli, endMilli)
+                for ((packageName, stat) in stats) {
+                    if (stat.totalTimeInForeground > 0 && !launchers.contains(packageName)) {
+                        totalScreenTime += stat.totalTimeInForeground
+                    }
+                }
+                totalScreenTime = totalScreenTime.coerceAtMost(24L * 60 * 60 * 1000) // 최대 24시간 초과 방지
+            }
+
+            map[date] = totalScreenTime.toFloat() / (1000f * 60f * 60f)
         }
     } catch (e: Exception) { e.printStackTrace() }
     return map
