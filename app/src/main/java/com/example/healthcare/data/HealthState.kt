@@ -3,6 +3,7 @@ package com.example.healthcare.data
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -11,8 +12,8 @@ import java.time.format.DateTimeFormatter
 // hour(시간) 속성이 추가되었습니다. (수동 입력은 0~23, 자동 연동 데이터는 null)
 data class HealthRecord(val date: LocalDate, val hour: Int?, val type: String, val value: Float)
 
-// 제품 종류 정보를 저장하는 데이터 클래스 추가
-data class BeverageType(val name: String, val content: Float)
+// 제품 종류 정보를 저장하는 데이터 클래스 (단위 unit 추가)
+data class BeverageType(val name: String, val content: Float, val unit: String)
 
 class HealthState {
     var alcoholTarget by mutableFloatStateOf(24f)
@@ -23,17 +24,20 @@ class HealthState {
     var standTarget by mutableFloatStateOf(12f)
     var screenTimeTarget by mutableFloatStateOf(6f)
 
-    // 알코올 및 카페인 종류 리스트
+    // 알코올 및 카페인 종류 리스트 (초기 단위 설정)
     val alcoholTypes = mutableStateListOf<BeverageType>(
-        BeverageType("소주", 1f),
-        BeverageType("맥주", 1f),
-        BeverageType("와인", 1f)
+        BeverageType("소주", 1f, "잔"),
+        BeverageType("맥주", 1f, "잔"),
+        BeverageType("와인", 1f, "잔")
     )
     val caffeineTypes = mutableStateListOf<BeverageType>(
-        BeverageType("아메리카노", 1f),
-        BeverageType("에너지 드링크", 2f),
-        BeverageType("녹차", 0.5f)
+        BeverageType("아메리카노", 10f, "잔"),
+        BeverageType("에너지 드링크", 50f, "캔"),
+        BeverageType("녹차", 5f, "잔")
     )
+
+    var selectedAlcoholType by mutableStateOf(alcoholTypes[0])
+    var selectedCaffeineType by mutableStateOf(caffeineTypes[0])
 
     private val _records = mutableStateListOf<HealthRecord>()
 
@@ -44,9 +48,9 @@ class HealthState {
             val date = today.minusDays(i.toLong())
             manualTypes.forEach { type ->
                 val value = when (type) {
-                    "알코올" -> (0..5).random().toFloat()
+                    "알코올" -> (0..5).random().toFloat() * 1f // g (기본 함유량 1 기준)
                     "흡연" -> (0..10).random().toFloat()
-                    "카페인" -> (0..3).random().toFloat()
+                    "카페인" -> (0..3).random().toFloat() * 10f // mg (아메리카노 10 기준)
                     else -> 0f
                 }
                 // 더미 데이터 초기화
@@ -106,9 +110,9 @@ class HealthState {
         val sleep = getTodayValue("수면")
         val stand = getTodayValue("일어서기")
         val screen = getTodayValue("스크린 타임")
-        val alcohol = getTodayValue("알코올")
+        val alcohol = getTodayValue("알코올") / selectedAlcoholType.content
         val smoke = getTodayValue("흡연")
-        val caffeine = getTodayValue("카페인")
+        val caffeine = getTodayValue("카페인") / selectedCaffeineType.content
 
         // 항목별 감점 로직 (가중치 적용)
         val sleepPenalty = if (sleep in 0.1f..sleepTarget) (sleepTarget - sleep) * 5f else 0f
@@ -127,9 +131,9 @@ class HealthState {
         val sleep = getTodayValue("수면")
         val stand = getTodayValue("일어서기")
         val screen = getTodayValue("스크린 타임")
-        val alcohol = getTodayValue("알코올")
+        val alcohol = getTodayValue("알코올") / selectedAlcoholType.content
         val smoke = getTodayValue("흡연")
-        val caffeine = getTodayValue("카페인")
+        val caffeine = getTodayValue("카페인") / selectedCaffeineType.content
 
         val penalties = mapOf(
             "수면" to if (sleep in 0.1f..sleepTarget) (sleepTarget - sleep) * 5f else 0f,

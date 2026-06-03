@@ -10,7 +10,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,25 +31,36 @@ import kotlin.math.roundToInt
 @Composable
 fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit) {
     var expandedPeriod by remember { mutableStateOf(false) }
-    var selectedPeriod by remember { mutableStateOf("단위(일)") }
+    var selectedPeriod by remember { mutableStateOf("기간(일)") }
     var expandedUnit by remember { mutableStateOf(false) }
     var selectedUnit by remember { mutableStateOf("잔") }
 
     var showTypeDialog by remember { mutableStateOf(false) }
     var showAddTypeDialog by remember { mutableStateOf(false) }
+    var editingType by remember { mutableStateOf<BeverageType?>(null) }
     var newTypeName by remember { mutableStateOf("") }
     var newTypeContent by remember { mutableStateOf("") }
+    var newTypeUnit by remember { mutableStateOf("") }
 
+    val selectedType = if (itemName == "알코올") healthState.selectedAlcoholType else healthState.selectedCaffeineType
     val isConvertible = itemName in listOf("알코올", "카페인")
-    val displayUnit = if (isConvertible) selectedUnit else when (itemName) {
+    
+    // 카페인 단위 ml -> mg 변경, 알코올 단위 ml -> g 변경
+    val convertibleUnit = if (itemName == "알코올") "g" else "mg"
+    val alternativeUnit = if (isConvertible) selectedType.unit else ""
+    
+    val displayUnit = if (isConvertible) {
+        if (selectedUnit == "잔") alternativeUnit else selectedUnit
+    } else when (itemName) {
         "흡연" -> "개비"
         "수면", "일어서기", "스크린 타임" -> "시간"
         "걸음수" -> "보"
         else -> "단위"
     }
 
-    val multiplier = if (isConvertible && selectedUnit == "ml") {
-        if (itemName == "알코올") 8f else 150f
+    // 선택된 종류의 함유량을 기준으로 multiplier 설정
+    val multiplier = if (isConvertible && selectedUnit == convertibleUnit) {
+        selectedType.content
     } else 1f
 
     val targetMax = when (itemName) {
@@ -88,21 +98,33 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         }
     }
 
-    val currentValue = healthState.getTodayValue(itemName)
-    val displayCurrentValue = currentValue * multiplier
+    val rawAbsoluteValue = healthState.getTodayValue(itemName)
+    val displayCurrentValue = if (isConvertible && selectedUnit == "잔") {
+        rawAbsoluteValue / selectedType.content
+    } else {
+        rawAbsoluteValue
+    }
     val isManualInput = itemName in listOf("알코올", "흡연", "카페인")
 
-    var tempDisplayValue by remember(displayCurrentValue) { mutableFloatStateOf(displayCurrentValue) }
+    var tempDisplayValue by remember(displayCurrentValue, selectedUnit) { mutableFloatStateOf(displayCurrentValue) }
     val hasSliderChanges = tempDisplayValue > displayCurrentValue
 
     var showInputDialog by remember { mutableStateOf(false) }
     var manualInputText by remember { mutableStateOf("") }
 
-    val rawChartData = healthState.getChartData(itemName, selectedPeriod)
-    val chartData = rawChartData.map { Pair(it.first, it.second * multiplier) }
+    val rawChartData = healthState.getChartData(itemName, selectedPeriod.replace("기간", "단위"))
+    val chartData = rawChartData.map { 
+        val displayVal = if (isConvertible) {
+            if (selectedUnit == "잔") it.second / selectedType.content else it.second
+        } else {
+            it.second
+        }
+        Pair(it.first, displayVal)
+    }
 
     if (showTypeDialog) {
         val types = if (itemName == "알코올") healthState.alcoholTypes else healthState.caffeineTypes
+        val contentUnit = if (itemName == "알코올") "g" else "mg"
         AlertDialog(
             onDismissRequest = { showTypeDialog = false },
             title = { Text(text = "$itemName 종류 관리", fontWeight = FontWeight.Bold) },
@@ -110,17 +132,51 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 Column(modifier = Modifier.fillMaxWidth()) {
                     types.forEach { type ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (itemName == "알코올") healthState.selectedAlcoholType = type
+                                    else healthState.selectedCaffeineType = type
+                                    showTypeDialog = false
+                                }
+                                .padding(vertical = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = "${type.name} (함유량: ${type.content})")
-                            IconButton(onClick = { types.remove(type) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "삭제", tint = Color.Red)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = type.name,
+                                    fontWeight = if (type == selectedType) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (type == selectedType) MaterialTheme.colorScheme.primary else Color.Black
+                                )
+                                Text(text = "1 ${type.unit}당 $itemName ${type.content}$contentUnit", fontSize = 12.sp, color = Color.Gray)
+                            }
+                            Row {
+                                IconButton(onClick = { 
+                                    editingType = type
+                                    newTypeName = type.name
+                                    newTypeContent = type.content.toString()
+                                    newTypeUnit = type.unit
+                                    showAddTypeDialog = true 
+                                }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "수정", tint = Color.Gray)
+                                }
+                                IconButton(onClick = { 
+                                    if (types.size > 1) {
+                                        if (type == selectedType) {
+                                            val nextType = types.find { it != type }!!
+                                            if (itemName == "알코올") healthState.selectedAlcoholType = nextType
+                                            else healthState.selectedCaffeineType = nextType
+                                        }
+                                        types.remove(type)
+                                    }
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "삭제", tint = Color.Red)
+                                }
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = { showAddTypeDialog = true }, modifier = Modifier.fillMaxWidth()) {
                         Text("새 종류 추가")
                     }
@@ -131,43 +187,81 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     }
 
     if (showAddTypeDialog) {
+        val contentUnit = if (itemName == "알코올") "g" else "mg"
+        val isEditing = editingType != null
         AlertDialog(
-            onDismissRequest = { showAddTypeDialog = false },
-            title = { Text(text = "새로운 $itemName 추가", fontWeight = FontWeight.Bold) },
+            onDismissRequest = { 
+                showAddTypeDialog = false 
+                editingType = null
+            },
+            title = { Text(text = if (isEditing) "$itemName 수정" else "새로운 $itemName 추가", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    OutlinedTextField(value = newTypeName, onValueChange = { newTypeName = it }, label = { Text("제품명") })
+                    OutlinedTextField(value = newTypeName, onValueChange = { newTypeName = it }, label = { Text("제품명 (예: 아메리카노)") })
                     Spacer(modifier = Modifier.height(8.dp))
+                    val fieldLabel = if (itemName == "알코올") "섭취당 알코올 함량" else "섭취당 카페인 함량"
                     OutlinedTextField(
                         value = newTypeContent,
                         onValueChange = { newTypeContent = it },
-                        label = { Text("함유량 (잔/개 기준)") },
+                        label = { Text("$fieldLabel ($contentUnit)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newTypeUnit,
+                        onValueChange = { newTypeUnit = it },
+                        label = { Text("단위 (예: 잔, 캔, 병)") }
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
                     val content = newTypeContent.toFloatOrNull() ?: 1f
+                    val unit = if (newTypeUnit.isBlank()) "단위" else newTypeUnit
                     val types = if (itemName == "알코올") healthState.alcoholTypes else healthState.caffeineTypes
-                    types.add(BeverageType(newTypeName, content))
+                    val newType = BeverageType(newTypeName, content, unit)
+                    
+                    if (isEditing) {
+                        val index = types.indexOf(editingType)
+                        if (index != -1) {
+                            types[index] = newType
+                            if (editingType == selectedType) {
+                                if (itemName == "알코올") healthState.selectedAlcoholType = newType
+                                else healthState.selectedCaffeineType = newType
+                            }
+                        }
+                    } else {
+                        types.add(newType)
+                        if (itemName == "알코올") healthState.selectedAlcoholType = newType
+                        else healthState.selectedCaffeineType = newType
+                    }
+                    
                     newTypeName = ""
                     newTypeContent = ""
+                    newTypeUnit = ""
+                    editingType = null
                     showAddTypeDialog = false
-                }) { Text("추가") }
+                    showTypeDialog = false
+                }) { Text(if (isEditing) "수정 완료" else "추가 및 선택") }
             },
-            dismissButton = { TextButton(onClick = { showAddTypeDialog = false }) { Text("취소") } }
+            dismissButton = { 
+                TextButton(onClick = { 
+                    showAddTypeDialog = false 
+                    editingType = null
+                    newTypeUnit = ""
+                }) { Text("취소") } 
+            }
         )
     }
 
     if (showInputDialog) {
-        val isMlUnit = isConvertible && selectedUnit == "ml"
+        val isContinuousUnit = isConvertible && (selectedUnit == "g" || selectedUnit == "mg")
         AlertDialog(
             onDismissRequest = { showInputDialog = false },
-            title = { Text(text = if (isMlUnit) "$itemName 섭취량 추가" else "$itemName 직접 입력", fontWeight = FontWeight.Bold) },
+            title = { Text(text = if (isContinuousUnit) "$itemName 섭취량 추가" else "$itemName 직접 입력", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    if (isMlUnit) {
+                    if (isContinuousUnit) {
                         Text(text = "현재 수치: ${displayCurrentValue.toInt()} $displayUnit", fontSize = 14.sp, color = Color.Gray)
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -175,7 +269,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         value = manualInputText,
                         onValueChange = { manualInputText = it },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        label = { Text(if (isMlUnit) "추가할 수량 ($displayUnit)" else "수치 ($displayUnit)") },
+                        label = { Text(if (isContinuousUnit) "추가할 수량 ($displayUnit)" else "수치 ($displayUnit)") },
                         singleLine = true
                     )
                 }
@@ -184,17 +278,18 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 TextButton(onClick = {
                     val parsedValue = manualInputText.toFloatOrNull()
                     if (parsedValue != null) {
-                        val finalValue = if (isMlUnit) {
+                        val finalDisplayValue = if (isContinuousUnit) {
                             displayCurrentValue + parsedValue
                         } else {
                             if (isManualInput) max(parsedValue.roundToInt().toFloat(), displayCurrentValue)
                             else max(parsedValue, displayCurrentValue)
                         }
 
+                        val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
                         if (isManualInput) {
-                            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, finalValue / multiplier)
+                            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, finalDisplayValue * displayToInternalMultiplier)
                         } else {
-                            healthState.updateAutoRecord(LocalDate.now(), itemName, finalValue / multiplier)
+                            healthState.updateAutoRecord(LocalDate.now(), itemName, finalDisplayValue * displayToInternalMultiplier)
                         }
                     }
                     showInputDialog = false
@@ -223,14 +318,26 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             if (isManualInput) {
                 val isSmoking = itemName == "흡연"
                 val isGlassUnit = isConvertible && selectedUnit == "잔"
-                val isMlUnit = isConvertible && selectedUnit == "ml"
+                val isContinuousUnit = isConvertible && (selectedUnit == "g" || selectedUnit == "mg")
                 val showManualInput = !isSmoking && !isGlassUnit
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(text = "오늘의 $itemName 기록 입력", fontSize = 14.sp, color = Color.Gray)
                     if (isConvertible) {
-                        TextButton(onClick = { showTypeDialog = true }) {
-                            Text(text = "(종류)", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        Surface(
+                            onClick = { showTypeDialog = true },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Box(modifier = Modifier.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "종류: ${selectedType.name}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                         }
                     }
                 }
@@ -250,20 +357,23 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     Slider(
                         value = tempDisplayValue.coerceIn(displayCurrentValue, dynamicSliderMax),
                         onValueChange = { newVal ->
-                            tempDisplayValue = if (isMlUnit) newVal else {
-                                val addedUnits = ((newVal - displayCurrentValue) / multiplier).roundToInt()
-                                displayCurrentValue + addedUnits * multiplier
+                            tempDisplayValue = if (isContinuousUnit) newVal else {
+                                val addedUnits = (newVal - displayCurrentValue).roundToInt()
+                                displayCurrentValue + addedUnits
                             }
                         },
                         valueRange = displayCurrentValue..dynamicSliderMax,
-                        steps = if (isMlUnit) 0 else ((dynamicSliderMax - displayCurrentValue) / multiplier).toInt().let { if (it > 0) it - 1 else 0 },
+                        steps = if (isContinuousUnit) 0 else (dynamicSliderMax - displayCurrentValue).toInt().let { if (it > 0) it - 1 else 0 },
                         modifier = Modifier.weight(sliderWeight)
                     )
                 }
 
                 if (hasSliderChanges) {
                     Button(
-                        onClick = { healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, tempDisplayValue / multiplier) },
+                        onClick = { 
+                            val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
+                            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, tempDisplayValue * displayToInternalMultiplier) 
+                        },
                         modifier = Modifier.align(Alignment.End).padding(bottom = 8.dp)
                     ) {
                         Text("저장")
@@ -277,7 +387,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     val contentModifier = if (showManualInput) {
                         Modifier
                             .clickable {
-                                manualInputText = if (isMlUnit) "" else "${tempDisplayValue.toInt()}"
+                                manualInputText = if (isContinuousUnit) "" else "${tempDisplayValue.toInt()}"
                                 showInputDialog = true
                             }
                             .background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp))
@@ -296,8 +406,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         Text(text = baseText, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
                         if (hasSliderChanges) {
-                            val deltaInUnits = delta / multiplier
-                            val deltaText = if (isMlUnit) String.format(" +%.1f", delta) else " +${deltaInUnits.roundToInt()}"
+                            val deltaText = if (isContinuousUnit) String.format(" +%.1f", delta) else " +${delta.roundToInt()}"
                             Text(text = deltaText, fontSize = 16.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
                         }
                         Text(text = " $displayUnit", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
@@ -320,14 +429,15 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 if (isConvertible) {
+                    val unitLabel = if (itemName == "알코올") "g" else "mg"
                     Box {
                         OutlinedButton(onClick = { expandedUnit = true }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), modifier = Modifier.height(36.dp)) {
-                            Text(text = "단위($selectedUnit)", color = Color.Black)
+                            Text(text = "단위($displayUnit)", color = Color.Black)
                             Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Black)
                         }
                         DropdownMenu(expanded = expandedUnit, onDismissRequest = { expandedUnit = false }) {
-                            DropdownMenuItem(text = { Text("단위(잔)") }, onClick = { selectedUnit = "잔"; expandedUnit = false })
-                            DropdownMenuItem(text = { Text("단위(ml)") }, onClick = { selectedUnit = "ml"; expandedUnit = false })
+                            DropdownMenuItem(text = { Text("단위($alternativeUnit)") }, onClick = { selectedUnit = "잔"; expandedUnit = false })
+                            DropdownMenuItem(text = { Text("단위($unitLabel)") }, onClick = { selectedUnit = unitLabel; expandedUnit = false })
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
@@ -339,14 +449,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Black)
                     }
                     DropdownMenu(expanded = expandedPeriod, onDismissRequest = { expandedPeriod = false }) {
-                        DropdownMenuItem(text = { Text("단위(일)") }, onClick = { selectedPeriod = "단위(일)"; expandedPeriod = false })
-                        DropdownMenuItem(text = { Text("단위(주)") }, onClick = { selectedPeriod = "단위(주)"; expandedPeriod = false })
+                        DropdownMenuItem(text = { Text("기간(일)") }, onClick = { selectedPeriod = "기간(일)"; expandedPeriod = false })
+                        DropdownMenuItem(text = { Text("기간(주)") }, onClick = { selectedPeriod = "기간(주)"; expandedPeriod = false })
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            CustomBarChart(data = chartData, isWeekly = selectedPeriod == "단위(주)", modifier = Modifier.fillMaxWidth().height(250.dp))
+            CustomBarChart(data = chartData, isWeekly = selectedPeriod == "기간(주)", modifier = Modifier.fillMaxWidth().height(250.dp))
             Spacer(modifier = Modifier.height(48.dp))
 
             if (!isManualInput) {

@@ -161,11 +161,13 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HealthInputSlider("🍶", "알코올", "잔", value = healthState.getTodayValue("알코올"), maxValue = healthState.alcoholTarget,
+                    val alcoholCups = healthState.getTodayValue("알코올") / healthState.selectedAlcoholType.content
+                    HealthInputSlider("🍶", "알코올", "잔", value = alcoholCups, maxValue = healthState.alcoholTarget,
                         onClick = { onNavigateToDetail("알코올") })
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HealthInputSlider("☕", "카페인", "잔", value = healthState.getTodayValue("카페인"), maxValue = healthState.caffeineTarget,
+                    val caffeineCups = healthState.getTodayValue("카페인") / healthState.selectedCaffeineType.content
+                    HealthInputSlider("☕", "카페인", "잔", value = caffeineCups, maxValue = healthState.caffeineTarget,
                         onClick = { onNavigateToDetail("카페인") })
                 }
             }
