@@ -1,5 +1,7 @@
 package com.example.healthcare.data
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -7,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 // hour(시간) 속성이 추가되었습니다. (수동 입력은 0~23, 자동 연동 데이터는 null)
@@ -15,7 +18,46 @@ data class HealthRecord(val date: LocalDate, val hour: Int?, val type: String, v
 // 제품 종류 정보를 저장하는 데이터 클래스 (단위 unit 추가)
 data class BeverageType(val name: String, val content: Float, val unit: String)
 
-class HealthState {
+class HealthState private constructor() {
+    private var prefs: SharedPreferences? = null
+
+    companion object {
+        @Volatile
+        private var instance: HealthState? = null
+        fun getInstance(context: Context? = null): HealthState =
+            instance ?: synchronized(this) {
+                instance ?: HealthState().also { 
+                    instance = it
+                    if (context != null) it.initPrefs(context)
+                }
+            }
+    }
+
+    fun initPrefs(context: Context) {
+        if (prefs == null) {
+            prefs = context.getSharedPreferences("health_prefs", Context.MODE_PRIVATE)
+            loadSelection()
+        }
+    }
+
+    private fun loadSelection() {
+        prefs?.let { p ->
+            val alcName = p.getString("selected_alcohol", "소주")
+            alcoholTypes.find { it.name == alcName }?.let { selectedAlcoholType = it }
+            
+            val cafName = p.getString("selected_caffeine", "아메리카노")
+            caffeineTypes.find { it.name == cafName }?.let { selectedCaffeineType = it }
+        }
+    }
+
+    fun saveSelection(type: String, name: String) {
+        prefs?.edit()?.apply {
+            if (type == "알코올") putString("selected_alcohol", name)
+            else putString("selected_caffeine", name)
+            apply()
+        }
+    }
+
     var alcoholTarget by mutableFloatStateOf(24f)
     var smokingTarget by mutableFloatStateOf(26f)
     var caffeineTarget by mutableFloatStateOf(30f)
@@ -72,6 +114,15 @@ class HealthState {
         val delta = newValue - currentTotal
         if (delta > 0f) {
             _records.add(HealthRecord(date, hour, type, delta))
+        }
+    }
+
+    fun updateRecord(date: LocalDate, type: String, value: Float) {
+        val manualTypes = listOf("알코올", "흡연", "카페인")
+        if (type in manualTypes) {
+            updateManualRecord(date, LocalTime.now().hour, type, value)
+        } else {
+            updateAutoRecord(date, type, value)
         }
     }
 

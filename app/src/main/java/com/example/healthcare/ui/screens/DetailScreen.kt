@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -17,13 +17,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import com.example.healthcare.data.HealthState
 import com.example.healthcare.data.BeverageType
 import com.example.healthcare.ui.components.CustomBarChart
+import com.example.healthcare.widget.HealthWidget
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.math.max
@@ -32,6 +36,9 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    
     var expandedPeriod by remember { mutableStateOf(false) }
     var selectedPeriod by remember { mutableStateOf("기간(일)") }
     var expandedUnit by remember { mutableStateOf(false) }
@@ -47,7 +54,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     val selectedType = if (itemName == "알코올") healthState.selectedAlcoholType else healthState.selectedCaffeineType
     val isConvertible = itemName in listOf("알코올", "카페인")
     
-    // 카페인 단위 ml -> mg 변경, 알코올 단위 ml -> g 변경
     val convertibleUnit = if (itemName == "알코올") "g" else "mg"
     val alternativeUnit = if (isConvertible) selectedType.unit else ""
     
@@ -60,7 +66,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         else -> "단위"
     }
 
-    // 선택된 종류의 함유량을 기준으로 multiplier 설정
     val multiplier = if (isConvertible && selectedUnit == convertibleUnit) {
         selectedType.content
     } else 1f
@@ -109,19 +114,25 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     val isManualInput = itemName in listOf("알코올", "흡연", "카페인")
 
     var tempDisplayValue by remember(displayCurrentValue, selectedUnit) { mutableFloatStateOf(displayCurrentValue) }
-    val hasSliderChanges = tempDisplayValue > displayCurrentValue
+    val hasSliderChanges = tempDisplayValue > displayCurrentValue + 0.001f
 
     var showInputDialog by remember { mutableStateOf(false) }
     var manualInputText by remember { mutableStateOf("") }
 
     val rawChartData = healthState.getChartData(itemName, selectedPeriod.replace("기간", "단위"))
-    val chartData = rawChartData.map { 
+    val chartData = rawChartData.map { (date: String, value: Float) -> 
         val displayVal = if (isConvertible) {
-            if (selectedUnit == "잔") it.second / selectedType.content else it.second
+            if (selectedUnit == "잔") value / selectedType.content else value
         } else {
-            it.second
+            value
         }
-        Pair(it.first, displayVal)
+        Pair(date, displayVal)
+    }
+
+    val updateWidgets = {
+        scope.launch {
+            HealthWidget.updateAllWidgets(context)
+        }
     }
 
     if (showTypeDialog) {
@@ -137,9 +148,15 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    if (itemName == "알코올") healthState.selectedAlcoholType = type
-                                    else healthState.selectedCaffeineType = type
+                                    if (itemName == "알코올") {
+                                        healthState.selectedAlcoholType = type
+                                        healthState.saveSelection("알코올", type.name)
+                                    } else {
+                                        healthState.selectedCaffeineType = type
+                                        healthState.saveSelection("카페인", type.name)
+                                    }
                                     showTypeDialog = false
+                                    updateWidgets()
                                 }
                                 .padding(vertical = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -171,6 +188,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                             else healthState.selectedCaffeineType = nextType
                                         }
                                         types.remove(type)
+                                        updateWidgets()
                                     }
                                 }) {
                                     Icon(Icons.Default.Delete, contentDescription = "삭제", tint = Color.Red)
@@ -228,14 +246,24 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         if (index != -1) {
                             types[index] = newType
                             if (editingType == selectedType) {
-                                if (itemName == "알코올") healthState.selectedAlcoholType = newType
-                                else healthState.selectedCaffeineType = newType
+                                if (itemName == "알코올") {
+                                    healthState.selectedAlcoholType = newType
+                                    healthState.saveSelection("알코올", newType.name)
+                                } else {
+                                    healthState.selectedCaffeineType = newType
+                                    healthState.saveSelection("카페인", newType.name)
+                                }
                             }
                         }
                     } else {
                         types.add(newType)
-                        if (itemName == "알코올") healthState.selectedAlcoholType = newType
-                        else healthState.selectedCaffeineType = newType
+                        if (itemName == "알코올") {
+                            healthState.selectedAlcoholType = newType
+                            healthState.saveSelection("알코올", newType.name)
+                        } else {
+                            healthState.selectedCaffeineType = newType
+                            healthState.saveSelection("카페인", newType.name)
+                        }
                     }
                     
                     newTypeName = ""
@@ -244,6 +272,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     editingType = null
                     showAddTypeDialog = false
                     showTypeDialog = false
+                    updateWidgets()
                 }) { Text(if (isEditing) "수정 완료" else "추가 및 선택") }
             },
             dismissButton = { 
@@ -293,6 +322,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         } else {
                             healthState.updateAutoRecord(LocalDate.now(), itemName, finalDisplayValue * displayToInternalMultiplier)
                         }
+                        updateWidgets()
                     }
                     showInputDialog = false
                 }) { Text("확인") }
@@ -307,7 +337,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         topBar = {
             TopAppBar(
                 title = { Text(text = "$itemName 세부 통계", fontWeight = FontWeight.Bold, fontSize = 24.sp) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기") } }
+                navigationIcon = { IconButton(onClick = onBack) { Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로가기") } }
             )
         }
     ) { innerPadding ->
@@ -375,6 +405,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         onClick = { 
                             val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
                             healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, tempDisplayValue * displayToInternalMultiplier) 
+                            updateWidgets()
                         },
                         modifier = Modifier.align(Alignment.End).padding(bottom = 8.dp)
                     ) {
@@ -404,11 +435,11 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = contentModifier
                     ) {
-                        val baseText = if (displayBase == displayBase.toInt().toFloat()) "${displayBase.toInt()}" else String.format("%.1f", displayBase)
+                        val baseText = if (displayBase == displayBase.toInt().toFloat()) "${displayBase.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayBase)
                         Text(text = baseText, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
                         if (hasSliderChanges) {
-                            val deltaText = if (isContinuousUnit) String.format(" +%.1f", delta) else " +${delta.roundToInt()}"
+                            val deltaText = if (isContinuousUnit) String.format(java.util.Locale.getDefault(), " +%.1f", delta) else " +${delta.roundToInt()}"
                             Text(text = deltaText, fontSize = 16.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
                         }
                         Text(text = " $displayUnit", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)

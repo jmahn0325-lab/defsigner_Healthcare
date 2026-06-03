@@ -11,7 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -27,9 +26,10 @@ import androidx.health.connect.client.records.StepsRecord
 import com.example.healthcare.data.HealthState
 import com.example.healthcare.ui.components.*
 import com.example.healthcare.utils.*
+import com.example.healthcare.widget.HealthWidget
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.LocalTime
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,17 +59,18 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                 isApiSyncing = true
                 if (healthConnectClient != null) {
                     val stepsHistory = fetchHistoricalSteps(healthConnectClient, 35)
-                    stepsHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "걸음수", value) }
+                    stepsHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "걸음수", value) }
 
                     val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
-                    sleepHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "수면", value) }
+                    sleepHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "수면", value) }
 
                     val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
-                    activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "일어서기", value) }
+                    activeTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "일어서기", value) }
                 }
                 val screenTimeHistory = fetchHistoricalScreenTime(context, 35)
-                screenTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
+                screenTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
 
+                HealthWidget.updateAllWidgets(context)
                 isApiSyncing = false
             }
         } else {
@@ -113,13 +114,15 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                                 if (granted.containsAll(healthPermissions)) {
                                     isApiSyncing = true
                                     val stepsHistory = fetchHistoricalSteps(healthConnectClient, 35)
-                                    stepsHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "걸음수", value) }
+                                    stepsHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "걸음수", value) }
                                     val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
-                                    sleepHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "수면", value) }
+                                    sleepHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "수면", value) }
                                     val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
-                                    activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "일어서기", value) }
+                                    activeTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "일어서기", value) }
                                     val screenTimeHistory = fetchHistoricalScreenTime(context, 35)
-                                    screenTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
+                                    screenTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
+                                    
+                                    HealthWidget.updateAllWidgets(context)
                                     isApiSyncing = false
                                 } else {
                                     permissionLauncher.launch(healthPermissions)
@@ -162,12 +165,12 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val alcoholCups = healthState.getTodayValue("알코올") / healthState.selectedAlcoholType.content
-                    HealthInputSlider("🍶", "알코올", "잔", value = alcoholCups, maxValue = healthState.alcoholTarget,
+                    HealthInputSlider("🍶", "알코올", healthState.selectedAlcoholType.unit, value = alcoholCups, maxValue = healthState.alcoholTarget,
                         onClick = { onNavigateToDetail("알코올") })
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val caffeineCups = healthState.getTodayValue("카페인") / healthState.selectedCaffeineType.content
-                    HealthInputSlider("☕", "카페인", "잔", value = caffeineCups, maxValue = healthState.caffeineTarget,
+                    HealthInputSlider("☕", "카페인", healthState.selectedCaffeineType.unit, value = caffeineCups, maxValue = healthState.caffeineTarget,
                         onClick = { onNavigateToDetail("카페인") })
                 }
             }
@@ -186,13 +189,13 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                     HealthApiRecord("👣", "걸음수", "${healthState.getTodayValue("걸음수").toInt()}보", progress = healthState.getTodayValue("걸음수") / healthState.stepsTarget.coerceAtLeast(1f), Color(0xFF4CAF50), onClick = { onNavigateToDetail("걸음수") })
                     
                     val activeTime = healthState.getTodayValue("일어서기")
-                    val activeDisplay = if (activeTime < 1f && activeTime > 0f) "${(activeTime * 60).toInt()}분" else String.format(java.util.Locale.getDefault(), "%.1f시간", activeTime)
+                    val activeDisplay = if (activeTime < 1f && activeTime > 0f) "${(activeTime * 60).toInt()}분" else String.format(Locale.getDefault(), "%.1f시간", activeTime)
                     HealthApiRecord("🧍", "일어서기", activeDisplay, progress = activeTime / healthState.standTarget.coerceAtLeast(1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("일어서기") })
                 }
 
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HealthApiRecord("🌙", "수면", String.format(java.util.Locale.getDefault(), "%.1f시간", healthState.getTodayValue("수면")), progress = healthState.getTodayValue("수면") / healthState.sleepTarget.coerceAtLeast(1f), Color(0xFF673AB7), onClick = { onNavigateToDetail("수면") })
-                    HealthApiRecord("📱", "스크린 타임", String.format(java.util.Locale.getDefault(), "%.1f시간", healthState.getTodayValue("스크린 타임")), progress = healthState.getTodayValue("스크린 타임") / healthState.screenTimeTarget.coerceAtLeast(1f), Color(0xFF2196F3), onClick = { onNavigateToDetail("스크린 타임") })
+                    HealthApiRecord("🌙", "수면", String.format(Locale.getDefault(), "%.1f시간", healthState.getTodayValue("수면")), progress = healthState.getTodayValue("수면") / healthState.sleepTarget.coerceAtLeast(1f), Color(0xFF673AB7), onClick = { onNavigateToDetail("수면") })
+                    HealthApiRecord("📱", "스크린 타임", String.format(Locale.getDefault(), "%.1f시간", healthState.getTodayValue("스크린 타임")), progress = healthState.getTodayValue("스크린 타임") / healthState.screenTimeTarget.coerceAtLeast(1f), Color(0xFF2196F3), onClick = { onNavigateToDetail("스크린 타임") })
                 }
             }
             

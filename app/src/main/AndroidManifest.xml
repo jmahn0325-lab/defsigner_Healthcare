@@ -49,6 +49,39 @@
             </intent-filter>
         </activity-alias>
 
+        <receiver android:name=".widget.AlcoholWidgetReceiver"
+            android:exported="true"
+            android:label="절주 도우미">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/health_widget_info" />
+        </receiver>
+
+        <receiver android:name=".widget.SmokingWidgetReceiver"
+            android:exported="true"
+            android:label="금연 도우미">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/health_widget_info" />
+        </receiver>
+
+        <receiver android:name=".widget.CaffeineWidgetReceiver"
+            android:exported="true"
+            android:label="카페인 조절">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/health_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>
