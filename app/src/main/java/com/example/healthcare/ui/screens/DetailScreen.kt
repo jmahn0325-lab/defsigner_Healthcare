@@ -325,6 +325,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                             healthState.updateAutoRecord(LocalDate.now(), itemName, finalDisplayValue * displayToInternalMultiplier)
                         }
                         updateWidgets()
+                        updateWidgets()
                     }
                     showInputDialog = false
                 }) { Text("확인") }
@@ -441,6 +442,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                             val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
                             healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, tempDisplayValue * displayToInternalMultiplier) 
                             updateWidgets()
+                            updateWidgets()
                         },
                         modifier = Modifier.align(Alignment.End).padding(bottom = 8.dp)
                     ) {
@@ -556,8 +558,9 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold
                                         )
+                                        val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
                                         Text(
-                                            text = "입력: ${detail.originalValue.toInt()}${displayUnit}${if (detail.isOverThreshold) " (폭주 페널티 🔥)" else ""}",
+                                            text = "입력: ${detail.originalValue.toInt()}$unitInDetail${if (detail.isOverThreshold) " (폭주 페널티 🔥)" else ""}",
                                             fontSize = 12.sp,
                                             color = if (detail.isOverThreshold) Color(0xFFD32F2F) else Color.Gray
                                         )

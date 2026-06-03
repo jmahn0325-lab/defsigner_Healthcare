@@ -122,20 +122,22 @@ class HealthState {
         val sleep = getTodayValue("수면")
         val stand = getTodayValue("일어서기")
         val screen = getTodayValue("스크린 타임")
-        val alcohol = getTodayValue("알코올") / selectedAlcoholType.content
-        val smoke = getTodayValue("흡연")
-        val caffeine = getTodayValue("카페인") / selectedCaffeineType.content
 
-        // 항목별 감점 로직 (가중치 적용)
+        // 자동 측정 항목 감점 (가중치 적용)
         val sleepPenalty = if (sleep in 0.1f..sleepTarget) (sleepTarget - sleep) * 5f else 0f
         val standPenalty = if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
         val screenPenalty = if (screen > screenTimeTarget) (screen - screenTimeTarget) * 3f else 0f
-        val alcoholPenalty = alcohol * 3f  // 1잔당 -3점
-        val smokePenalty = smoke * 4f      // 1개비당 -4점
-        val caffeinePenalty = if (caffeine > caffeineTarget) (caffeine - caffeineTarget) * 2f else 0f
+        
+        // 수동 입력 항목 감점 (시간 감쇠가 적용된 현재 총 감점 합계)
+        val alcoholPenalty = getTotalCurrentPenalty("알코올")
+        val smokePenalty = getTotalCurrentPenalty("흡연")
+        val caffeinePenalty = getTotalCurrentPenalty("카페인")
 
-        score -= (sleepPenalty + standPenalty + screenPenalty + alcoholPenalty + smokePenalty + caffeinePenalty)
-        return score.toInt().coerceIn(0, 100)
+        // score += penalty 인 이유는 getTotalCurrentPenalty가 음수 값을 반환하기 때문입니다.
+        score -= (sleepPenalty + standPenalty + screenPenalty)
+        score += (alcoholPenalty + smokePenalty + caffeinePenalty)
+        
+        return Math.round(score).toInt().coerceIn(0, 100)
     }
 
     // 가장 감점이 큰 요소를 찾아 맞춤형 피드백을 제공합니다.
@@ -143,18 +145,16 @@ class HealthState {
         val sleep = getTodayValue("수면")
         val stand = getTodayValue("일어서기")
         val screen = getTodayValue("스크린 타임")
-        val alcohol = getTodayValue("알코올") / selectedAlcoholType.content
-        val smoke = getTodayValue("흡연")
-        val caffeine = getTodayValue("카페인") / selectedCaffeineType.content
 
-        val penalties = mapOf(
+        val penalties = mutableMapOf(
             "수면" to if (sleep in 0.1f..sleepTarget) (sleepTarget - sleep) * 5f else 0f,
             "일어서기" to if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f,
-            "스크린 타임" to if (screen > screenTimeTarget) (screen - screenTimeTarget) * 3f else 0f,
-            "알코올" to alcohol * 3f,
-            "흡연" to smoke * 4f,
-            "카페인" to if (caffeine > caffeineTarget) (caffeine - caffeineTarget) * 2f else 0f
+            "스크린 타임" to if (screen > screenTimeTarget) (screen - screenTimeTarget) * 3f else 0f
         )
+        
+        listOf("알코올", "흡연", "카페인").forEach { 
+            penalties[it] = -getTotalCurrentPenalty(it)
+        }
 
         val worstFactor = penalties.maxByOrNull { it.value }
 
@@ -189,28 +189,69 @@ class HealthState {
 
     fun getPenaltyDetails(type: String): List<PenaltyDetail> {
         val now = LocalDateTime.now()
-        val manualRecords = _records.filter { it.type == type && it.hour != null }
+        val sevenDaysAgo = now.minusDays(7)
+        val manualRecords = _records.filter { it.type == type && it.hour != null && it.value > 0f }
+            .sortedWith(compareBy({ it.date }, { it.hour }))
         
+        var sessionIntake = 0f // 세션 내 누적 섭취량 (임계치 체크용)
+        var lastIntakeTime: LocalDateTime? = null
+
         return manualRecords.mapNotNull { record ->
+            // 시점 스냅: 해당 시간의 정시(00분) 기준으로 처리 (1시 10분/50분 모두 1시 데이터)
             val recordDateTime = record.date.atTime(record.hour ?: 0, 0)
-            val hoursPassed = ChronoUnit.HOURS.between(recordDateTime, now)
             
-            if (hoursPassed >= 24) return@mapNotNull null
-            
-            val initialPenalty = when (type) {
-                "알코올" -> -3f * (record.value / selectedAlcoholType.content)
-                "흡연" -> -4f * record.value
-                "카페인" -> -2f * (record.value / selectedCaffeineType.content)
-                else -> 0f
+            // 세션 리셋 로직: 마지막 섭취로부터 24시간 동안 공백이 있었는지 확인
+            if (lastIntakeTime != null && ChronoUnit.HOURS.between(lastIntakeTime, recordDateTime) >= 24) {
+                sessionIntake = 0f
             }
             
-            // 시간이 지날수록 감점이 줄어듦 (회복)
-            val currentPenalty = initialPenalty * (1f - hoursPassed / 24f)
+            val threshold = when (type) {
+                "알코올" -> 40f  // 40g
+                "카페인" -> 400f // 400mg
+                "흡연" -> 13f    // 13개비 (요청사항 반영)
+                else -> 1000f
+            }
+
+            // 가중치 설정 (요청하신 고정 가중치)
+            val baseWeight = when (type) {
+                "알코올" -> 0.25f // 10g당 2.5점 (1g당 0.25점)
+                "흡연" -> 3.0f    // 1개비당 3.0점
+                "카페인" -> 0.04f  // 50mg당 2.0점 (1mg당 0.04점)
+                else -> 0f
+            }
+
+            // 폭주 페널티 분할 계산: 임계치 이전분(1배)과 이후분(2배)을 나눔
+            val normalPart = (threshold - sessionIntake).coerceIn(0f, record.value)
+            val bingePart = (record.value - normalPart).coerceAtLeast(0f)
+            val wasAlreadyBinging = sessionIntake >= threshold
+
+            // 이산적 시간 경과 계산 (정시 기준 차이)
+            val totalHoursPassed = ChronoUnit.HOURS.between(recordDateTime, now).toFloat()
+            if (totalHoursPassed < 0) return@mapNotNull null
+
+            // 지수 감쇠 적용 (반감기 수식): 알코올/흡연 24시간, 카페인 6시간
+            val halfLife = if (type == "카페인") 6.0 else 24.0
+            val decayFactor = Math.pow(0.5, totalHoursPassed / halfLife).toFloat()
+
+            // 포인트 계산: (일반분량 * 1배 + 폭주분량 * 2배) * 감쇠계수
+            val penaltyPoints = ((normalPart * baseWeight) + (bingePart * baseWeight * 2.0f)) * decayFactor
+            val currentPenalty = -penaltyPoints
             
+            // 디버깅을 위해 결과가 비정상적인지 체크 (예: 카페인이 너무 크게 감점되는지)
+            // sessionIntake 업데이트 전 현재 상태 기록
+            val isBingeRecord = wasAlreadyBinging || bingePart > 0f
+
+            // 세션 데이터 업데이트 (리셋 여부와 상관없이 누적 및 시간 갱신)
+            sessionIntake += record.value
+            lastIntakeTime = recordDateTime
+
+            // UI 표시용으로는 최근 7일 데이터만 반환
+            if (recordDateTime.isBefore(sevenDaysAgo)) return@mapNotNull null
+
             PenaltyDetail(
                 dateTime = recordDateTime,
                 originalValue = record.value,
-                isOverThreshold = record.value >= 5f, // 단순화된 임계치
+                isOverThreshold = isBingeRecord,
                 currentPenalty = currentPenalty
             )
         }
