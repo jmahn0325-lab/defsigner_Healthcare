@@ -7,15 +7,30 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import kotlin.math.pow
 
 // hour(시간) 속성이 추가되었습니다. (수동 입력은 0~23, 자동 연동 데이터는 null)
-data class HealthRecord(val date: LocalDate, val hour: Int?, val type: String, val value: Float)
+data class HealthRecord(val date: LocalDate, val hour: Int?, val type: String, val value: Float) {
+    val dateTime: LocalDateTime
+        get() = LocalDateTime.of(date, LocalTime.of(hour ?: 0, 0))
+}
 
 // 제품 종류 정보를 저장하는 데이터 클래스 (단위 unit 추가)
 data class BeverageType(val name: String, val content: Float, val unit: String)
 
+data class PenaltyDetail(
+    val dateTime: LocalDateTime,
+    val originalValue: Float,
+    val currentPenalty: Float,
+    val isOverThreshold: Boolean
+)
+
 class HealthState {
+    var gender by mutableStateOf("남성") // "남성" 또는 "여성"
     var alcoholTarget by mutableFloatStateOf(24f)
     var smokingTarget by mutableFloatStateOf(26f)
     var caffeineTarget by mutableFloatStateOf(30f)
@@ -26,14 +41,14 @@ class HealthState {
 
     // 알코올 및 카페인 종류 리스트 (초기 단위 설정)
     val alcoholTypes = mutableStateListOf<BeverageType>(
-        BeverageType("소주", 1f, "잔"),
-        BeverageType("맥주", 1f, "잔"),
-        BeverageType("와인", 1f, "잔")
+        BeverageType("소주", 8f, "잔"), // 1잔당 알코올 약 8g
+        BeverageType("맥주", 10f, "잔"), // 1잔당 알코올 약 10g
+        BeverageType("와인", 10f, "잔")
     )
     val caffeineTypes = mutableStateListOf<BeverageType>(
-        BeverageType("아메리카노", 10f, "잔"),
-        BeverageType("에너지 드링크", 50f, "캔"),
-        BeverageType("녹차", 5f, "잔")
+        BeverageType("아메리카노", 150f, "잔"),
+        BeverageType("에너지 드링크", 100f, "캔"),
+        BeverageType("녹차", 30f, "잔")
     )
 
     var selectedAlcoholType by mutableStateOf(alcoholTypes[0])
@@ -48,13 +63,14 @@ class HealthState {
             val date = today.minusDays(i.toLong())
             manualTypes.forEach { type ->
                 val value = when (type) {
-                    "알코올" -> (0..5).random().toFloat() * 1f // g (기본 함유량 1 기준)
-                    "흡연" -> (0..10).random().toFloat()
-                    "카페인" -> (0..3).random().toFloat() * 10f // mg (아메리카노 10 기준)
+                    "알코올" -> (0..5).random().toFloat() // 잔
+                    "흡연" -> (0..10).random().toFloat() // 개비
+                    "카페인" -> (0..3).random().toFloat() * 150f // mg
                     else -> 0f
                 }
-                // 더미 데이터 초기화
-                _records.add(HealthRecord(date, 12, type, value))
+                // 더미 데이터 초기화 시 시간을 랜덤하게 설정 (0~23)
+                val randomHour = (0..23).random()
+                _records.add(HealthRecord(date, randomHour, type, value))
             }
         }
     }
@@ -75,8 +91,60 @@ class HealthState {
         }
     }
 
+    private fun getDecay(hoursElapsed: Long): Double {
+        return if (hoursElapsed >= 168) 0.0
+        else (0.5).pow(hoursElapsed.toDouble() / 24.0)
+    }
+
+    private fun getCaffeineDecay(hoursElapsed: Long): Double {
+        return if (hoursElapsed >= 168) 0.0
+        else (0.5).pow(hoursElapsed.toDouble() / 6.0)
+    }
+
+    private fun getDailyTotalOnDate(date: LocalDate, type: String): Float {
+        return _records.filter { it.date == date && it.type == type }.sumOf { it.value.toDouble() }.toFloat()
+    }
+
     fun getTodayValue(type: String): Float {
-        return _records.filter { it.date == LocalDate.now() && it.type == type }.sumOf { it.value.toDouble() }.toFloat()
+        return getDailyTotalOnDate(LocalDate.now(), type)
+    }
+
+    // 특정 항목의 현재 총 감점 합계를 계산합니다.
+    fun getTotalCurrentPenalty(type: String): Float {
+        return getPenaltyDetails(type).sumOf { it.currentPenalty.toDouble() }.toFloat()
+    }
+
+    // 특정 항목의 최근 7일간의 개별 기록과 현재 적용 중인 감점 수치를 반환합니다.
+    fun getPenaltyDetails(type: String): List<PenaltyDetail> {
+        val now = LocalDateTime.now()
+        val sevenDaysAgo = now.minusDays(7)
+        val smokingThreshold = if (gender == "남성") 13f else 7f
+        val alcoholThreshold = if (gender == "남성") 40f else 20f
+        val caffeineThreshold = if (gender == "남성") 400f else 300f
+
+        return _records
+            .filter { it.type == type && it.dateTime.isAfter(sevenDaysAgo) }
+            .sortedByDescending { it.dateTime }
+            .map { record ->
+                val hoursElapsed = java.time.Duration.between(record.dateTime, now).toHours()
+                val dailyTotal = getDailyTotalOnDate(record.date, type)
+                
+                val (multiplier, decay, basePenalty) = when (type) {
+                    "흡연" -> Triple(if (dailyTotal > smokingThreshold) 2.0 else 1.0, getDecay(hoursElapsed), -3.0)
+                    "알코올" -> Triple(if (dailyTotal > alcoholThreshold) 2.0 else 1.0, getDecay(hoursElapsed), -0.25)
+                    "카페인" -> Triple(if (dailyTotal > caffeineThreshold) 2.0 else 1.0, getCaffeineDecay(hoursElapsed), -0.04)
+                    else -> Triple(1.0, 1.0, 0.0)
+                }
+                
+                val currentPenalty = basePenalty * record.value * multiplier * decay
+                PenaltyDetail(
+                    dateTime = record.dateTime,
+                    originalValue = record.value,
+                    currentPenalty = currentPenalty.toFloat(),
+                    isOverThreshold = multiplier > 1.0
+                )
+            }
+            .filter { kotlin.math.abs(it.currentPenalty) >= 0.01f } // 감점이 0.01 미만(-0점 포함)인 기록은 제외
     }
 
     fun getChartData(type: String, period: String): List<Pair<String, Float>> {
@@ -106,23 +174,55 @@ class HealthState {
 
     // 걸음수를 제외한 각 건강 지표를 통해 0~100점의 종합 점수를 계산합니다.
     fun getHealthScore(): Int {
-        var score = 100f
+        var score = 100.0
+        val now = LocalDateTime.now()
+        val sevenDaysAgo = now.minusDays(7)
+
+        // 자동 측정 데이터 기반 감점 (기존 로직 유지)
         val sleep = getTodayValue("수면")
         val stand = getTodayValue("일어서기")
         val screen = getTodayValue("스크린 타임")
-        val alcohol = getTodayValue("알코올") / selectedAlcoholType.content
-        val smoke = getTodayValue("흡연")
-        val caffeine = getTodayValue("카페인") / selectedCaffeineType.content
+        
+        val sleepPenalty = if (sleep in 0.1f..sleepTarget) (sleepTarget - sleep) * 5.0 else 0.0
+        val standPenalty = if (stand in 0.1f..standTarget) (standTarget - stand) * 2.0 else 0.0
+        val screenPenalty = if (screen > screenTimeTarget) (screen - screenTimeTarget) * 3.0 else 0.0
+        
+        score -= (sleepPenalty + standPenalty + screenPenalty)
 
-        // 항목별 감점 로직 (가중치 적용)
-        val sleepPenalty = if (sleep in 0.1f..sleepTarget) (sleepTarget - sleep) * 5f else 0f
-        val standPenalty = if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
-        val screenPenalty = if (screen > screenTimeTarget) (screen - screenTimeTarget) * 3f else 0f
-        val alcoholPenalty = alcohol * 3f  // 1잔당 -3점
-        val smokePenalty = smoke * 4f      // 1개비당 -4점
-        val caffeinePenalty = if (caffeine > caffeineTarget) (caffeine - caffeineTarget) * 2f else 0f
+        // 수동 입력 데이터 기반 감점 (신규 감쇠 로직 적용)
+        val smokingThreshold = if (gender == "남성") 13f else 7f
+        val alcoholThreshold = if (gender == "남성") 40f else 20f
+        val caffeineThreshold = if (gender == "남성") 400f else 300f
 
-        score -= (sleepPenalty + standPenalty + screenPenalty + alcoholPenalty + smokePenalty + caffeinePenalty)
+        val relevantRecords = _records.filter { it.dateTime.isAfter(sevenDaysAgo) }
+
+        relevantRecords.forEach { record ->
+            val hoursElapsed = java.time.Duration.between(record.dateTime, now).toHours()
+            if (hoursElapsed < 0) return@forEach // 미래 데이터 무시
+
+            when (record.type) {
+                "흡연" -> {
+                    val dailyTotal = getDailyTotalOnDate(record.date, "흡연")
+                    val multiplier = if (dailyTotal > smokingThreshold) 2.0 else 1.0
+                    val decay = getDecay(hoursElapsed)
+                    score += -3.0 * record.value * multiplier * decay
+                }
+                "알코올" -> {
+                    val dailyTotal = getDailyTotalOnDate(record.date, "알코올")
+                    val multiplier = if (dailyTotal > alcoholThreshold) 2.0 else 1.0
+                    val decay = getDecay(hoursElapsed)
+                    score += -2.5 * (record.value / 10.0) * multiplier * decay
+                }
+                "카페인" -> {
+                    // record.value는 'mg' 단위 (단, 더미 데이터는 아메리카노 10 기준이었으므로 확인 필요)
+                    val dailyTotal = getDailyTotalOnDate(record.date, "카페인")
+                    val multiplier = if (dailyTotal > caffeineThreshold) 2.0 else 1.0
+                    val decay = getCaffeineDecay(hoursElapsed)
+                    score += -0.04 * record.value * multiplier * decay
+                }
+            }
+        }
+
         return score.toInt().coerceIn(0, 100)
     }
 

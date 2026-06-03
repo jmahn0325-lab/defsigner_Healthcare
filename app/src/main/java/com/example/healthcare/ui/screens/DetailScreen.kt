@@ -1,6 +1,7 @@
 package com.example.healthcare.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +27,7 @@ import com.example.healthcare.data.BeverageType
 import com.example.healthcare.ui.components.CustomBarChart
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -317,6 +319,39 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 3. 감점 총합 요약 표시 (최상단)
+            if (isManualInput) {
+                val totalPenalty = healthState.getTotalCurrentPenalty(itemName)
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (totalPenalty < 0) Color(0xFFFFEBEE) else Color(0xFFE8F5E9),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (totalPenalty < 0) Color(0xFFEF9A9A) else Color(0xFFA5D6A7))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(text = "현재 적용 중인 총 감점", fontSize = 14.sp, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = String.format("%.2f점", totalPenalty),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (totalPenalty < 0) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+                        )
+                        if (totalPenalty < 0) {
+                            Text(
+                                text = "시간이 지나면 점수가 서서히 회복됩니다.",
+                                fontSize = 12.sp,
+                                color = Color(0xFFD32F2F).copy(alpha = 0.7f),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             if (isManualInput) {
                 val isSmoking = itemName == "흡연"
                 val isGlassUnit = isConvertible && selectedUnit == "잔"
@@ -459,6 +494,63 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
             Spacer(modifier = Modifier.height(24.dp))
             CustomBarChart(data = chartData, isWeekly = selectedPeriod == "기간(주)", modifier = Modifier.fillMaxWidth().height(250.dp))
+            
+            // 시점별 감점 상세 내역 추가 (흡연, 알코올, 카페인만 해당)
+            if (isManualInput) {
+                Spacer(modifier = Modifier.height(32.dp))
+                Text(
+                    text = "시점별 감점 상세 내역 (최근 7일)",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                )
+                
+                val penaltyDetails = healthState.getPenaltyDetails(itemName)
+                
+                if (penaltyDetails.isEmpty()) {
+                    Text(text = "기록된 데이터가 없습니다.", color = Color.Gray, modifier = Modifier.padding(vertical = 16.dp))
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).background(Color(0xFFF9F9F9), RoundedCornerShape(8.dp)).border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))) {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
+                            penaltyDetails.forEach { detail ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        // 1. 시점 정확히 반영 (MM/dd H시 형식)
+                                        Text(
+                                            text = detail.dateTime.format(DateTimeFormatter.ofPattern("MM/dd H시")),
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "입력: ${detail.originalValue.toInt()}${displayUnit}${if (detail.isOverThreshold) " (폭주 페널티 🔥)" else ""}",
+                                            fontSize = 12.sp,
+                                            color = if (detail.isOverThreshold) Color(0xFFD32F2F) else Color.Gray
+                                        )
+                                    }
+                                    Text(
+                                        text = String.format("%.2f점", detail.currentPenalty),
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (detail.currentPenalty < 0) Color(0xFFE53935) else Color.Black
+                                    )
+                                }
+                                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+                            }
+                        }
+                    }
+                    Text(
+                        text = "* 시간이 지남에 따라 감점 수치는 서서히 감소합니다.",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 4.dp).fillMaxWidth()
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(48.dp))
 
             if (!isManualInput) {
