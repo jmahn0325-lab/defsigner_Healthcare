@@ -92,7 +92,8 @@ fun HealthApiRecord(emoji: String, title: String, value: String, progress: Float
 
 @Composable
 fun CustomBarChart(data: List<Pair<String, Float>>, isWeekly: Boolean, modifier: Modifier = Modifier) {
-    val maxDataValue = (data.maxOfOrNull { it.second } ?: 10f).coerceAtLeast(10f)
+    val rawMax = data.maxOfOrNull { it.second } ?: 10f
+    val maxDataValue = (rawMax * 1.2f).coerceAtLeast(10f)
     val yAxisLabels = listOf(maxDataValue.toInt().toString(), (maxDataValue / 2).toInt().toString(), "0")
 
     Box(modifier = modifier) {
@@ -105,11 +106,11 @@ fun CustomBarChart(data: List<Pair<String, Float>>, isWeekly: Boolean, modifier:
                 }
             }
         }
-        Row(modifier = Modifier.fillMaxSize().padding(start = 48.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
+        Row(modifier = Modifier.fillMaxSize().padding(start = 48.dp, top = 24.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
             data.forEach { (_, value) ->
                 val heightFraction = (value / maxDataValue).coerceIn(0f, 1f)
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom, modifier = Modifier.fillMaxHeight()) {
-                    Text(text = value.toInt().toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
+                    Text(text = value.toInt().toString(), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 2.dp))
                     Box(modifier = Modifier.width(if (isWeekly) 40.dp else 24.dp).fillMaxHeight(heightFraction.coerceAtLeast(0.01f)).background(Color(0xFFD2B48C), RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)).border(1.dp, Color.DarkGray, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
                     Spacer(modifier = Modifier.height(16.dp))
                 }

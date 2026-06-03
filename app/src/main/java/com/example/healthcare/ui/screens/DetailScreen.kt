@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +21,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.healthcare.data.HealthState
+import com.example.healthcare.data.BeverageType
 import com.example.healthcare.ui.components.CustomBarChart
 import java.time.LocalDate
 import java.time.LocalTime
@@ -33,6 +35,11 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     var selectedPeriod by remember { mutableStateOf("단위(일)") }
     var expandedUnit by remember { mutableStateOf(false) }
     var selectedUnit by remember { mutableStateOf("잔") }
+
+    var showTypeDialog by remember { mutableStateOf(false) }
+    var showAddTypeDialog by remember { mutableStateOf(false) }
+    var newTypeName by remember { mutableStateOf("") }
+    var newTypeContent by remember { mutableStateOf("") }
 
     val isConvertible = itemName in listOf("알코올", "카페인")
     val displayUnit = if (isConvertible) selectedUnit else when (itemName) {
@@ -49,7 +56,9 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     val targetMax = when (itemName) {
         "걸음수" -> 20000f
         "수면", "일어서기", "스크린 타임" -> 24f
-        "흡연" -> 40f
+        "흡연" -> 26f
+        "알코올" -> 24f
+        "카페인" -> 30f
         else -> 20f
     }
     val displayTargetMax = targetMax * multiplier
@@ -91,6 +100,65 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
     val rawChartData = healthState.getChartData(itemName, selectedPeriod)
     val chartData = rawChartData.map { Pair(it.first, it.second * multiplier) }
+
+    if (showTypeDialog) {
+        val types = if (itemName == "알코올") healthState.alcoholTypes else healthState.caffeineTypes
+        AlertDialog(
+            onDismissRequest = { showTypeDialog = false },
+            title = { Text(text = "$itemName 종류 관리", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    types.forEach { type ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "${type.name} (함유량: ${type.content})")
+                            IconButton(onClick = { types.remove(type) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "삭제", tint = Color.Red)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { showAddTypeDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("새 종류 추가")
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showTypeDialog = false }) { Text("닫기") } }
+        )
+    }
+
+    if (showAddTypeDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddTypeDialog = false },
+            title = { Text(text = "새로운 $itemName 추가", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    OutlinedTextField(value = newTypeName, onValueChange = { newTypeName = it }, label = { Text("제품명") })
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newTypeContent,
+                        onValueChange = { newTypeContent = it },
+                        label = { Text("함유량 (잔/개 기준)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val content = newTypeContent.toFloatOrNull() ?: 1f
+                    val types = if (itemName == "알코올") healthState.alcoholTypes else healthState.caffeineTypes
+                    types.add(BeverageType(newTypeName, content))
+                    newTypeName = ""
+                    newTypeContent = ""
+                    showAddTypeDialog = false
+                }) { Text("추가") }
+            },
+            dismissButton = { TextButton(onClick = { showAddTypeDialog = false }) { Text("취소") } }
+        )
+    }
 
     if (showInputDialog) {
         val isMlUnit = isConvertible && selectedUnit == "ml"
@@ -158,23 +226,40 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 val isMlUnit = isConvertible && selectedUnit == "ml"
                 val showManualInput = !isSmoking && !isGlassUnit
 
-                Text(text = "오늘의 $itemName 기록 입력", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
-                val dynamicSliderMax = max(displayTargetValue, tempDisplayValue).coerceAtLeast(1f * multiplier)
-
-                Slider(
-                    value = tempDisplayValue.coerceIn(displayCurrentValue, dynamicSliderMax),
-                    onValueChange = { newVal ->
-                        if (newVal >= displayCurrentValue) {
-                            tempDisplayValue = if (isMlUnit) newVal else {
-                                if (multiplier == 1f) newVal.roundToInt().toFloat()
-                                else (newVal / multiplier).roundToInt() * multiplier
-                            }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "오늘의 $itemName 기록 입력", fontSize = 14.sp, color = Color.Gray)
+                    if (isConvertible) {
+                        TextButton(onClick = { showTypeDialog = true }) {
+                            Text(text = "(종류)", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                         }
-                    },
-                    valueRange = 0f..dynamicSliderMax,
-                    steps = if (isMlUnit) 0 else ((dynamicSliderMax / multiplier).toInt() - 1).coerceAtLeast(0),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    }
+                }
+                val dynamicSliderMax = max(displayTargetValue, tempDisplayValue).coerceAtLeast(1f * multiplier)
+                val sliderWeight = (dynamicSliderMax - displayCurrentValue).coerceAtLeast(0.01f)
+                val baseWeight = displayCurrentValue.coerceAtLeast(0.01f)
+
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (baseWeight > 0.01f) {
+                        Box(
+                            modifier = Modifier
+                                .weight(baseWeight)
+                                .height(4.dp)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp))
+                        )
+                    }
+                    Slider(
+                        value = tempDisplayValue.coerceIn(displayCurrentValue, dynamicSliderMax),
+                        onValueChange = { newVal ->
+                            tempDisplayValue = if (isMlUnit) newVal else {
+                                val addedUnits = ((newVal - displayCurrentValue) / multiplier).roundToInt()
+                                displayCurrentValue + addedUnits * multiplier
+                            }
+                        },
+                        valueRange = displayCurrentValue..dynamicSliderMax,
+                        steps = if (isMlUnit) 0 else ((dynamicSliderMax - displayCurrentValue) / multiplier).toInt().let { if (it > 0) it - 1 else 0 },
+                        modifier = Modifier.weight(sliderWeight)
+                    )
+                }
 
                 if (hasSliderChanges) {
                     Button(
@@ -207,11 +292,12 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = contentModifier
                     ) {
-                        val baseText = if (isMlUnit) String.format("%.1f", displayBase) else "${displayBase.toInt()}"
+                        val baseText = if (displayBase == displayBase.toInt().toFloat()) "${displayBase.toInt()}" else String.format("%.1f", displayBase)
                         Text(text = baseText, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
                         if (hasSliderChanges) {
-                            val deltaText = if (isMlUnit) String.format(" +%.1f", delta) else " +${delta.toInt()}"
+                            val deltaInUnits = delta / multiplier
+                            val deltaText = if (isMlUnit) String.format(" +%.1f", delta) else " +${deltaInUnits.roundToInt()}"
                             Text(text = deltaText, fontSize = 16.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
                         }
                         Text(text = " $displayUnit", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
@@ -263,11 +349,13 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             CustomBarChart(data = chartData, isWeekly = selectedPeriod == "단위(주)", modifier = Modifier.fillMaxWidth().height(250.dp))
             Spacer(modifier = Modifier.height(48.dp))
 
-            Text(text = "목표 $itemName 설정 (메인 화면 최대치 연동)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Slider(value = displayTargetValue, onValueChange = onTargetChange, valueRange = 0f..displayTargetMax, colors = SliderDefaults.colors(thumbColor = Color(0xFFD2B48C), activeTrackColor = Color(0xFFD2B48C)), modifier = Modifier.fillMaxWidth())
-            val formattedTarget = if (itemName == "걸음수") "${displayTargetValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayTargetValue)
-            Text(text = "$formattedTarget $displayUnit", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            if (!isManualInput) {
+                Text(text = "목표 $itemName 설정 (메인 화면 최대치 연동)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Slider(value = displayTargetValue, onValueChange = onTargetChange, valueRange = 0f..displayTargetMax, colors = SliderDefaults.colors(thumbColor = Color(0xFFD2B48C), activeTrackColor = Color(0xFFD2B48C)), modifier = Modifier.fillMaxWidth())
+                val formattedTarget = if (itemName == "걸음수") "${displayTargetValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayTargetValue)
+                Text(text = "$formattedTarget $displayUnit", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
         }

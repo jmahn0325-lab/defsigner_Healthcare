@@ -11,14 +11,29 @@ import java.time.format.DateTimeFormatter
 // hour(시간) 속성이 추가되었습니다. (수동 입력은 0~23, 자동 연동 데이터는 null)
 data class HealthRecord(val date: LocalDate, val hour: Int?, val type: String, val value: Float)
 
+// 제품 종류 정보를 저장하는 데이터 클래스 추가
+data class BeverageType(val name: String, val content: Float)
+
 class HealthState {
-    var alcoholTarget by mutableFloatStateOf(10f)
-    var smokingTarget by mutableFloatStateOf(20f)
-    var caffeineTarget by mutableFloatStateOf(10f)
+    var alcoholTarget by mutableFloatStateOf(24f)
+    var smokingTarget by mutableFloatStateOf(26f)
+    var caffeineTarget by mutableFloatStateOf(30f)
     var sleepTarget by mutableFloatStateOf(8f)
     var stepsTarget by mutableFloatStateOf(10000f)
     var standTarget by mutableFloatStateOf(12f)
     var screenTimeTarget by mutableFloatStateOf(6f)
+
+    // 알코올 및 카페인 종류 리스트
+    val alcoholTypes = mutableStateListOf<BeverageType>(
+        BeverageType("소주", 1f),
+        BeverageType("맥주", 1f),
+        BeverageType("와인", 1f)
+    )
+    val caffeineTypes = mutableStateListOf<BeverageType>(
+        BeverageType("아메리카노", 1f),
+        BeverageType("에너지 드링크", 2f),
+        BeverageType("녹차", 0.5f)
+    )
 
     private val _records = mutableStateListOf<HealthRecord>()
 

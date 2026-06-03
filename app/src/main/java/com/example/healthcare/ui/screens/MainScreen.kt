@@ -165,12 +165,12 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                         onClick = { onNavigateToDetail("알코올") })
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HealthInputSlider("🚬", "흡연", "개비", value = healthState.getTodayValue("흡연"), maxValue = healthState.smokingTarget,
-                        onClick = { onNavigateToDetail("흡연") })
+                    HealthInputSlider("☕", "카페인", "잔", value = healthState.getTodayValue("카페인"), maxValue = healthState.caffeineTarget,
+                        onClick = { onNavigateToDetail("카페인") })
                 }
             }
-            HealthInputSlider("☕", "카페인", "잔", value = healthState.getTodayValue("카페인"), maxValue = healthState.caffeineTarget,
-                onClick = { onNavigateToDetail("카페인") })
+            HealthInputSlider("🚬", "흡연", "개비", value = healthState.getTodayValue("흡연"), maxValue = healthState.smokingTarget,
+                onClick = { onNavigateToDetail("흡연") })
 
             Text(
                 text = "자동 측정 데이터",
