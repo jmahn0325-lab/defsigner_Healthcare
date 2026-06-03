@@ -34,9 +34,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun HealthApp() {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val navController = rememberNavController()
-    // 최상위에서 상태를 한 번만 초기화하여 하위 화면으로 전달 (또는 ViewModel로 대체 가능)
-    val healthState = remember { HealthState() }
+    // 싱글톤 인스턴스를 가져오고 초기화합니다.
+    val healthState = remember { HealthState.getInstance(context) }
 
     NavHost(navController = navController, startDestination = "main") {
         composable("main") {
