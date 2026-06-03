@@ -4,17 +4,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -22,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.example.healthcare.data.HealthState
 import com.example.healthcare.ui.components.CustomBarChart
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlin.math.max
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,8 +33,10 @@ import kotlin.math.max
 fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit) {
     var expandedPeriod by remember { mutableStateOf(false) }
     var selectedPeriod by remember { mutableStateOf("단위(일)") }
+
     var expandedUnit by remember { mutableStateOf(false) }
     var selectedUnit by remember { mutableStateOf("잔") }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     val isConvertible = itemName in listOf("알코올", "카페인")
     val displayUnit = if (isConvertible) selectedUnit else when (itemName) {
@@ -42,12 +48,15 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
     val multiplier = if (isConvertible && selectedUnit == "ml") {
         if (itemName == "알코올") 8f else 150f
-    } else 1f
+    } else {
+        1f
+    }
 
     val targetMax = when (itemName) {
         "걸음수" -> 20000f
         "수면", "일어서기", "스크린 타임" -> 24f
         "흡연" -> 40f
+        "알코올", "카페인" -> 20f
         else -> 20f
     }
     val displayTargetMax = targetMax * multiplier
@@ -97,17 +106,22 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     onValueChange = { manualInputText = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     label = { Text("수치 ($displayUnit)") },
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     val parsedValue = manualInputText.toFloatOrNull()
                     if (parsedValue != null) {
-                        healthState.updateRecord(LocalDate.now(), itemName, parsedValue / multiplier)
+                        val newValue = max(parsedValue / multiplier, healthState.getTodayValue(itemName))
+                        val nowHour = LocalTime.now().hour
+                        healthState.updateManualRecord(LocalDate.now(), nowHour, itemName, newValue)
                     }
                     showInputDialog = false
-                }) { Text("확인") }
+                }) {
+                    Text("확인")
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showInputDialog = false }) { Text("취소", color = Color.Gray) }
@@ -116,69 +130,108 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { Text(text = "$itemName 세부 통계", fontWeight = FontWeight.Bold, fontSize = 24.sp) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기") } }
+            MediumTopAppBar(
+                title = { Text(text = "$itemName 통계", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로가기")
+                    }
+                },
+                scrollBehavior = scrollBehavior
             )
         }
     ) { innerPadding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 24.dp).verticalScroll(rememberScrollState()),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 20.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (isManualInput) {
-                Text(text = "오늘의 $itemName 기록 입력", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
-                val dynamicSliderMax = max(displayTargetValue, displayCurrentValue).coerceAtLeast(1f * multiplier)
-
-                Slider(
-                    value = displayCurrentValue.coerceIn(0f, dynamicSliderMax),
-                    onValueChange = { newVal -> healthState.updateRecord(LocalDate.now(), itemName, newVal / multiplier) },
-                    valueRange = 0f..dynamicSliderMax,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    val formattedInputVal = if (displayCurrentValue == displayCurrentValue.toInt().toFloat()) "${displayCurrentValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue)
+            // Current Status Card
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "$formattedInputVal $displayUnit",
-                        fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable { manualInputText = formattedInputVal; showInputDialog = true }.background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp)).padding(horizontal = 24.dp, vertical = 8.dp)
+                        text = if (isManualInput) "오늘의 기록" else "현재 측정된 수치",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
-                    Text(text = "터치하여 숫자 직접 입력", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
-                }
-            } else {
-                Text(text = "현재 기록된 수치 (자동 연동)", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(modifier = Modifier.fillMaxWidth().background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp)).padding(16.dp), contentAlignment = Alignment.Center) {
+                    Spacer(modifier = Modifier.height(8.dp))
                     val formattedVal = if (itemName == "걸음수") "${displayCurrentValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue)
-                    Text(text = "$formattedVal $displayUnit", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "$formattedVal $displayUnit",
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    
+                    if (isManualInput) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        var sliderValue by remember(displayCurrentValue) { mutableStateOf(displayCurrentValue) }
+                        val dynamicSliderMax = max(displayTargetValue, sliderValue).coerceAtLeast(1f * multiplier)
+
+                        Slider(
+                            value = sliderValue.coerceIn(displayCurrentValue, dynamicSliderMax),
+                            onValueChange = { sliderValue = it },
+                            valueRange = displayCurrentValue.coerceAtMost(dynamicSliderMax)..dynamicSliderMax,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                activeTrackColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(
+                                onClick = {
+                                    manualInputText = if (sliderValue == sliderValue.toInt().toFloat()) "${sliderValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", sliderValue)
+                                    showInputDialog = true
+                                }
+                            ) {
+                                Text("직접 입력하기", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                            }
+                            Button(
+                                onClick = {
+                                    val nowHour = LocalTime.now().hour
+                                    healthState.updateManualRecord(LocalDate.now(), nowHour, itemName, sliderValue / multiplier)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onPrimaryContainer, contentColor = MaterialTheme.colorScheme.primaryContainer),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("기록 저장", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                if (isConvertible) {
-                    Box {
-                        OutlinedButton(onClick = { expandedUnit = true }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), modifier = Modifier.height(36.dp)) {
-                            Text(text = "단위($selectedUnit)", color = Color.Black)
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Black)
+            // Chart Section
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(text = "활동 통계", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Row {
+                    if (isConvertible) {
+                        TextButton(onClick = { expandedUnit = true }) {
+                            Text("단위($selectedUnit)")
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                         }
                         DropdownMenu(expanded = expandedUnit, onDismissRequest = { expandedUnit = false }) {
                             DropdownMenuItem(text = { Text("단위(잔)") }, onClick = { selectedUnit = "잔"; expandedUnit = false })
                             DropdownMenuItem(text = { Text("단위(ml)") }, onClick = { selectedUnit = "ml"; expandedUnit = false })
                         }
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-
-                Box {
-                    OutlinedButton(onClick = { expandedPeriod = true }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), modifier = Modifier.height(36.dp)) {
-                        Text(text = selectedPeriod, color = Color.Black)
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Black)
+                    TextButton(onClick = { expandedPeriod = true }) {
+                        Text(selectedPeriod)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                     }
                     DropdownMenu(expanded = expandedPeriod, onDismissRequest = { expandedPeriod = false }) {
                         DropdownMenuItem(text = { Text("단위(일)") }, onClick = { selectedPeriod = "단위(일)"; expandedPeriod = false })
@@ -187,15 +240,39 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
             CustomBarChart(data = chartData, isWeekly = selectedPeriod == "단위(주)", modifier = Modifier.fillMaxWidth().height(250.dp))
-            Spacer(modifier = Modifier.height(48.dp))
+            
+            Spacer(modifier = Modifier.height(32.dp))
 
-            Text(text = "목표 $itemName 설정 (메인 화면 최대치 연동)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Slider(value = displayTargetValue, onValueChange = onTargetChange, valueRange = 0f..displayTargetMax, colors = SliderDefaults.colors(thumbColor = Color(0xFFD2B48C), activeTrackColor = Color(0xFFD2B48C)), modifier = Modifier.fillMaxWidth())
-            val formattedTarget = if (itemName == "걸음수") "${displayTargetValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayTargetValue)
-            Text(text = "$formattedTarget $displayUnit", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            // Target Setting Section
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(text = "목표 $itemName 설정", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(text = "메인 화면의 게이지와 연동됩니다.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Slider(
+                        value = displayTargetValue,
+                        onValueChange = onTargetChange,
+                        valueRange = 0f..displayTargetMax,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.secondary,
+                            activeTrackColor = MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                    
+                    val formattedTarget = if (itemName == "걸음수") "${displayTargetValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayTargetValue)
+                    Text(
+                        text = "$formattedTarget $displayUnit",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.align(Alignment.End)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
         }
