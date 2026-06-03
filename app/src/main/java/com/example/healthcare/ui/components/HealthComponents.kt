@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,21 +17,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 @Composable
-fun TopSpectrumBanner(onClick: () -> Unit = {}) {
+fun TopSpectrumBanner(score: Int = 70, message: String = "수면은 충분하지만, 어제 음주를 많이 하셨네요.\n술을 줄이고 물을 많이 마셔볼까요?", onClick: () -> Unit = {}) {
     Box(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Black).clickable { onClick() }.padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(modifier = Modifier.size(60.dp).border(1.dp, Color.Black, RoundedCornerShape(50)), contentAlignment = Alignment.Center) { Text(text = "😏", fontSize = 32.sp) }
+            val emoji = when {
+                score >= 80 -> "😏"
+                score >= 50 -> "😐"
+                else -> "😫"
+            }
+            Box(modifier = Modifier.size(60.dp).border(1.dp, Color.Black, RoundedCornerShape(50)), contentAlignment = Alignment.Center) { Text(text = emoji, fontSize = 32.sp) }
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text(text = "70", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "$score", fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(8.dp))
-                    LinearProgressIndicator(progress = { 0.7f }, modifier = Modifier.weight(1f).height(12.dp).padding(bottom = 6.dp), color = Color.Blue)
+                    LinearProgressIndicator(progress = { score / 100f }, modifier = Modifier.weight(1f).height(12.dp).padding(bottom = 6.dp), color = Color.Blue)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "100", fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
                 }
-                Text(text = "수면은 충분하지만, 어제 음주를 많이 하셨네요.\n술을 줄이고 물을 많이 마셔볼까요?", fontSize = 12.sp, lineHeight = 16.sp)
+                Text(text = message, fontSize = 12.sp, lineHeight = 16.sp)
             }
             Icon(imageVector = Icons.Default.Info, contentDescription = "상세 정보", modifier = Modifier.align(Alignment.Top))
         }
@@ -39,8 +45,9 @@ fun TopSpectrumBanner(onClick: () -> Unit = {}) {
 }
 
 @Composable
-fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: Float, maxValue: Float, onValueChange: (Float) -> Unit, onClick: () -> Unit = {}) {
-    val dynamicMax = max(maxValue, value).coerceAtLeast(1f)
+fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: Float, maxValue: Float, onClick: () -> Unit = {}) {
+    val progress = (value / maxValue.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    val color = if (value > maxValue) Color.Red else MaterialTheme.colorScheme.primary
 
     Box(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Gray).clickable { onClick() }.padding(12.dp)) {
         Column {
@@ -50,10 +57,16 @@ fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: 
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(text = title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
-                Text(text = "${value.toInt()}$valueSuffix", fontSize = 14.sp, color = if(value > maxValue) Color.Red else Color.Black)
+                Text(text = "${value.toInt()}$valueSuffix", fontSize = 14.sp, color = color)
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Slider(value = value.coerceIn(0f, dynamicMax), onValueChange = onValueChange, valueRange = 0f..dynamicMax, modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(10.dp).border(1.dp, Color.LightGray),
+                color = color,
+                trackColor = Color.Transparent
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(text = "Max: ${maxValue.toInt()}$valueSuffix", fontSize = 10.sp, color = Color.Gray, modifier = Modifier.align(Alignment.End))
         }
     }

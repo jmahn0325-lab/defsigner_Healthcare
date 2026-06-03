@@ -22,7 +22,9 @@ import androidx.compose.ui.unit.sp
 import com.example.healthcare.data.HealthState
 import com.example.healthcare.ui.components.CustomBarChart
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +83,9 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     val displayCurrentValue = currentValue * multiplier
     val isManualInput = itemName in listOf("알코올", "흡연", "카페인")
 
+    var tempDisplayValue by remember(displayCurrentValue) { mutableFloatStateOf(displayCurrentValue) }
+    val hasSliderChanges = tempDisplayValue > displayCurrentValue
+
     var showInputDialog by remember { mutableStateOf(false) }
     var manualInputText by remember { mutableStateOf("") }
 
@@ -88,23 +93,41 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     val chartData = rawChartData.map { Pair(it.first, it.second * multiplier) }
 
     if (showInputDialog) {
+        val isMlUnit = isConvertible && selectedUnit == "ml"
         AlertDialog(
             onDismissRequest = { showInputDialog = false },
-            title = { Text(text = "$itemName 직접 입력", fontWeight = FontWeight.Bold) },
+            title = { Text(text = if (isMlUnit) "$itemName 섭취량 추가" else "$itemName 직접 입력", fontWeight = FontWeight.Bold) },
             text = {
-                OutlinedTextField(
-                    value = manualInputText,
-                    onValueChange = { manualInputText = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    label = { Text("수치 ($displayUnit)") },
-                    singleLine = true
-                )
+                Column {
+                    if (isMlUnit) {
+                        Text(text = "현재 수치: ${displayCurrentValue.toInt()} $displayUnit", fontSize = 14.sp, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    OutlinedTextField(
+                        value = manualInputText,
+                        onValueChange = { manualInputText = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        label = { Text(if (isMlUnit) "추가할 수량 ($displayUnit)" else "수치 ($displayUnit)") },
+                        singleLine = true
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
                     val parsedValue = manualInputText.toFloatOrNull()
                     if (parsedValue != null) {
-                        healthState.updateRecord(LocalDate.now(), itemName, parsedValue / multiplier)
+                        val finalValue = if (isMlUnit) {
+                            displayCurrentValue + parsedValue
+                        } else {
+                            if (isManualInput) max(parsedValue.roundToInt().toFloat(), displayCurrentValue)
+                            else max(parsedValue, displayCurrentValue)
+                        }
+
+                        if (isManualInput) {
+                            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, finalValue / multiplier)
+                        } else {
+                            healthState.updateAutoRecord(LocalDate.now(), itemName, finalValue / multiplier)
+                        }
                     }
                     showInputDialog = false
                 }) { Text("확인") }
@@ -130,24 +153,73 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             Spacer(modifier = Modifier.height(16.dp))
 
             if (isManualInput) {
+                val isSmoking = itemName == "흡연"
+                val isGlassUnit = isConvertible && selectedUnit == "잔"
+                val isMlUnit = isConvertible && selectedUnit == "ml"
+                val showManualInput = !isSmoking && !isGlassUnit
+
                 Text(text = "오늘의 $itemName 기록 입력", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
-                val dynamicSliderMax = max(displayTargetValue, displayCurrentValue).coerceAtLeast(1f * multiplier)
+                val dynamicSliderMax = max(displayTargetValue, tempDisplayValue).coerceAtLeast(1f * multiplier)
 
                 Slider(
-                    value = displayCurrentValue.coerceIn(0f, dynamicSliderMax),
-                    onValueChange = { newVal -> healthState.updateRecord(LocalDate.now(), itemName, newVal / multiplier) },
+                    value = tempDisplayValue.coerceIn(displayCurrentValue, dynamicSliderMax),
+                    onValueChange = { newVal ->
+                        if (newVal >= displayCurrentValue) {
+                            tempDisplayValue = if (isMlUnit) newVal else {
+                                if (multiplier == 1f) newVal.roundToInt().toFloat()
+                                else (newVal / multiplier).roundToInt() * multiplier
+                            }
+                        }
+                    },
                     valueRange = 0f..dynamicSliderMax,
+                    steps = if (isMlUnit) 0 else ((dynamicSliderMax / multiplier).toInt() - 1).coerceAtLeast(0),
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                if (hasSliderChanges) {
+                    Button(
+                        onClick = { healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, tempDisplayValue / multiplier) },
+                        modifier = Modifier.align(Alignment.End).padding(bottom = 8.dp)
+                    ) {
+                        Text("저장")
+                    }
+                }
+
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    val formattedInputVal = if (displayCurrentValue == displayCurrentValue.toInt().toFloat()) "${displayCurrentValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue)
-                    Text(
-                        text = "$formattedInputVal $displayUnit",
-                        fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable { manualInputText = formattedInputVal; showInputDialog = true }.background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp)).padding(horizontal = 24.dp, vertical = 8.dp)
-                    )
-                    Text(text = "터치하여 숫자 직접 입력", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+                    val displayBase = displayCurrentValue
+                    val delta = tempDisplayValue - displayCurrentValue
+
+                    val contentModifier = if (showManualInput) {
+                        Modifier
+                            .clickable {
+                                manualInputText = if (isMlUnit) "" else "${tempDisplayValue.toInt()}"
+                                showInputDialog = true
+                            }
+                            .background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 24.dp, vertical = 8.dp)
+                    } else {
+                        Modifier
+                            .background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 24.dp, vertical = 8.dp)
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = contentModifier
+                    ) {
+                        val baseText = if (isMlUnit) String.format("%.1f", displayBase) else "${displayBase.toInt()}"
+                        Text(text = baseText, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+
+                        if (hasSliderChanges) {
+                            val deltaText = if (isMlUnit) String.format(" +%.1f", delta) else " +${delta.toInt()}"
+                            Text(text = deltaText, fontSize = 16.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                        }
+                        Text(text = " $displayUnit", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                    }
+
+                    if (showManualInput) {
+                        Text(text = "섭취량 직접 입력", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+                    }
                 }
             } else {
                 Text(text = "현재 기록된 수치 (자동 연동)", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))

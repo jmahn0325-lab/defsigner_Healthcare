@@ -162,17 +162,14 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HealthInputSlider("🍶", "알코올", "잔", value = healthState.getTodayValue("알코올"), maxValue = healthState.alcoholTarget,
-                        onValueChange = { healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, "알코올", it) },
                         onClick = { onNavigateToDetail("알코올") })
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HealthInputSlider("🚬", "흡연", "개비", value = healthState.getTodayValue("흡연"), maxValue = healthState.smokingTarget,
-                        onValueChange = { healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, "흡연", it) },
                         onClick = { onNavigateToDetail("흡연") })
                 }
             }
             HealthInputSlider("☕", "카페인", "잔", value = healthState.getTodayValue("카페인"), maxValue = healthState.caffeineTarget,
-                onValueChange = { healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, "카페인", it) },
                 onClick = { onNavigateToDetail("카페인") })
 
             Text(
