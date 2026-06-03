@@ -5,15 +5,27 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import android.content.Context
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 // hour(시간) 속성이 추가되었습니다. (수동 입력은 0~23, 자동 연동 데이터는 null)
 data class HealthRecord(val date: LocalDate, val hour: Int?, val type: String, val value: Float)
 
 // 제품 종류 정보를 저장하는 데이터 클래스 (단위 unit 추가)
 data class BeverageType(val name: String, val content: Float, val unit: String)
+
+// 감점 상세 정보를 저장하는 데이터 클래스
+data class PenaltyDetail(
+    val dateTime: LocalDateTime,
+    val originalValue: Float,
+    val isOverThreshold: Boolean,
+    val currentPenalty: Float
+)
 
 class HealthState {
     var alcoholTarget by mutableFloatStateOf(24f)
@@ -158,6 +170,67 @@ class HealthState {
             "흡연" -> "흡연량이 많아 건강에 치명적입니다. 단기 금연부터 시도해보는 것은 어떨까요?"
             "카페인" -> "카페인 섭취가 높습니다. 커피 대신 물을 많이 마셔보세요."
             else -> "건강 수치에 주의가 필요합니다."
+        }
+    }
+
+    // --- 추가된 메서드들 ---
+
+    fun saveSelection(type: String, name: String) {
+        // 실제 구현에서는 SharedPreferences 등을 사용할 수 있습니다.
+    }
+
+    fun loadSelections(context: Context) {
+        // 초기화 시 호출
+    }
+
+    fun getTotalCurrentPenalty(type: String): Float {
+        return getPenaltyDetails(type).sumOf { it.currentPenalty.toDouble() }.toFloat()
+    }
+
+    fun getPenaltyDetails(type: String): List<PenaltyDetail> {
+        val now = LocalDateTime.now()
+        val manualRecords = _records.filter { it.type == type && it.hour != null }
+        
+        return manualRecords.mapNotNull { record ->
+            val recordDateTime = record.date.atTime(record.hour ?: 0, 0)
+            val hoursPassed = ChronoUnit.HOURS.between(recordDateTime, now)
+            
+            if (hoursPassed >= 24) return@mapNotNull null
+            
+            val initialPenalty = when (type) {
+                "알코올" -> -3f * (record.value / selectedAlcoholType.content)
+                "흡연" -> -4f * record.value
+                "카페인" -> -2f * (record.value / selectedCaffeineType.content)
+                else -> 0f
+            }
+            
+            // 시간이 지날수록 감점이 줄어듦 (회복)
+            val currentPenalty = initialPenalty * (1f - hoursPassed / 24f)
+            
+            PenaltyDetail(
+                dateTime = recordDateTime,
+                originalValue = record.value,
+                isOverThreshold = record.value >= 5f, // 단순화된 임계치
+                currentPenalty = currentPenalty
+            )
+        }
+    }
+
+    fun updateRecord(date: LocalDate, type: String, value: Float) {
+        updateAutoRecord(date, type, value)
+    }
+
+    companion object {
+        @Volatile
+        private var instance: HealthState? = null
+
+        fun getInstance(context: Context? = null): HealthState {
+            return instance ?: synchronized(this) {
+                instance ?: HealthState().also { 
+                    instance = it 
+                    context?.let { ctx -> it.loadSelections(ctx) }
+                }
+            }
         }
     }
 }
