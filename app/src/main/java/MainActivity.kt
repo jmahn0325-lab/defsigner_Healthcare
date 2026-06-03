@@ -39,7 +39,6 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
-import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.navigation.compose.NavHost
@@ -47,12 +46,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.Period
 import java.time.ZoneId
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.max
@@ -79,7 +76,7 @@ class HealthState {
         for (i in 0..35) {
             val date = today.minusDays(i.toLong())
             manualTypes.forEach { type ->
-                val value = when(type) {
+                val value = when (type) {
                     "알코올" -> (0..5).random().toFloat()
                     "흡연" -> (0..10).random().toFloat()
                     "카페인" -> (0..3).random().toFloat()
@@ -148,7 +145,10 @@ fun HealthApp() {
 
     NavHost(navController = navController, startDestination = "main") {
         composable("main") {
-            MainHealthSpectrumScreen(healthState = healthState, onNavigateToDetail = { itemName -> navController.navigate("detail/$itemName") })
+            MainHealthSpectrumScreen(
+                healthState = healthState,
+                onNavigateToDetail = { itemName -> navController.navigate("detail/$itemName") }
+            )
         }
         composable("detail/{itemName}") { backStackEntry ->
             val itemName = backStackEntry.arguments?.getString("itemName") ?: "상세"
@@ -190,6 +190,9 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
 
                     val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
                     sleepHistory.forEach { (date, value) -> healthState.updateRecord(date, "수면", value) }
+
+                    val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
+                    activeTimeHistory.forEach { (date, value) -> healthState.updateRecord(date, "일어서기", value) }
                 }
                 val screenTimeHistory = fetchHistoricalScreenTime(context, 35)
                 screenTimeHistory.forEach { (date, value) -> healthState.updateRecord(date, "스크린 타임", value) }
@@ -198,6 +201,30 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
             }
         } else {
             Toast.makeText(context, "건강 데이터 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 초기 로딩 시 한 번 동기화 시도
+    LaunchedEffect(Unit) {
+        if (healthConnectClient != null) {
+            val granted = healthConnectClient.permissionController.getGrantedPermissions()
+            if (granted.containsAll(healthPermissions)) {
+                isApiSyncing = true
+                val stepsHistory = fetchHistoricalSteps(healthConnectClient, 35)
+                stepsHistory.forEach { (date, value) -> healthState.updateRecord(date, "걸음수", value) }
+
+                val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
+                sleepHistory.forEach { (date, value) -> healthState.updateRecord(date, "수면", value) }
+
+                val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
+                activeTimeHistory.forEach { (date, value) -> healthState.updateRecord(date, "일어서기", value) }
+
+                if (hasUsageStatsPermission(context)) {
+                    val screenTimeHistory = fetchHistoricalScreenTime(context, 35)
+                    screenTimeHistory.forEach { (date, value) -> healthState.updateRecord(date, "스크린 타임", value) }
+                }
+                isApiSyncing = false
+            }
         }
     }
 
@@ -239,6 +266,9 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                             val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
                             sleepHistory.forEach { (date, value) -> healthState.updateRecord(date, "수면", value) }
 
+                            val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
+                            activeTimeHistory.forEach { (date, value) -> healthState.updateRecord(date, "일어서기", value) }
+
                             val screenTimeHistory = fetchHistoricalScreenTime(context, 35)
                             screenTimeHistory.forEach { (date, value) -> healthState.updateRecord(date, "스크린 타임", value) }
 
@@ -267,7 +297,16 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 HealthApiRecord("🌙", "수면", String.format(java.util.Locale.getDefault(), "%.1f시간", healthState.getTodayValue("수면")), progress = healthState.getTodayValue("수면") / healthState.sleepTarget.coerceAtLeast(1f), Color(0xFF673AB7), onClick = { onNavigateToDetail("수면") })
                 HealthApiRecord("👣", "걸음수", "${healthState.getTodayValue("걸음수").toInt()}보", progress = healthState.getTodayValue("걸음수") / healthState.stepsTarget.coerceAtLeast(1f), Color(0xFF4CAF50), onClick = { onNavigateToDetail("걸음수") })
-                HealthApiRecord("🧍", "일어서기", "${healthState.getTodayValue("일어서기").toInt()}시간", progress = healthState.getTodayValue("일어서기") / healthState.standTarget.coerceAtLeast(1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("일어서기") })
+
+                // 일어서기(활동 시간) UI 포맷 설정 (1시간 미만이면 분 단위 표기, 이상이면 소수점 시간 표기)
+                val activeTime = healthState.getTodayValue("일어서기")
+                val activeDisplay = if (activeTime < 1f && activeTime > 0f) {
+                    "${(activeTime * 60).toInt()}분"
+                } else {
+                    String.format(java.util.Locale.getDefault(), "%.1f시간", activeTime)
+                }
+                HealthApiRecord("🧍", "일어서기", activeDisplay, progress = activeTime / healthState.standTarget.coerceAtLeast(1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("일어서기") })
+
                 HealthApiRecord("📱", "스크린 타임", String.format(java.util.Locale.getDefault(), "%.1f시간", healthState.getTodayValue("스크린 타임")), progress = healthState.getTodayValue("스크린 타임") / healthState.screenTimeTarget.coerceAtLeast(1f), Color(0xFF2196F3), onClick = { onNavigateToDetail("스크린 타임") })
             }
         }
@@ -276,17 +315,30 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
 }
 
 // ==========================================
-// 세부 통계 화면 (직접 입력 및 팝업 추가)
+// 세부 통계 화면
 // ==========================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit) {
-    val unit = when (itemName) {
-        "알코올", "카페인" -> "잔"
+    var expandedPeriod by remember { mutableStateOf(false) }
+    var selectedPeriod by remember { mutableStateOf("단위(일)") }
+
+    var expandedUnit by remember { mutableStateOf(false) }
+    var selectedUnit by remember { mutableStateOf("잔") }
+
+    val isConvertible = itemName in listOf("알코올", "카페인")
+    val displayUnit = if (isConvertible) selectedUnit else when (itemName) {
         "흡연" -> "개비"
         "수면", "일어서기", "스크린 타임" -> "시간"
         "걸음수" -> "보"
         else -> "단위"
+    }
+
+    // 알코올 1잔 = 8ml, 카페인 1잔 = 150ml 환산 비율 적용
+    val multiplier = if (isConvertible && selectedUnit == "ml") {
+        if (itemName == "알코올") 8f else 150f
+    } else {
+        1f
     }
 
     val targetMax = when (itemName) {
@@ -296,6 +348,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         "알코올", "카페인" -> 20f
         else -> 20f
     }
+    val displayTargetMax = targetMax * multiplier
 
     val targetValue = when (itemName) {
         "알코올" -> healthState.alcoholTarget
@@ -307,29 +360,30 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         "스크린 타임" -> healthState.screenTimeTarget
         else -> 10f
     }
+    val displayTargetValue = targetValue * multiplier
 
     val onTargetChange: (Float) -> Unit = { newVal ->
+        val internalVal = newVal / multiplier
         when (itemName) {
-            "알코올" -> healthState.alcoholTarget = newVal
-            "흡연" -> healthState.smokingTarget = newVal
-            "카페인" -> healthState.caffeineTarget = newVal
-            "수면" -> healthState.sleepTarget = newVal
-            "걸음수" -> healthState.stepsTarget = newVal
-            "일어서기" -> healthState.standTarget = newVal
-            "스크린 타임" -> healthState.screenTimeTarget = newVal
+            "알코올" -> healthState.alcoholTarget = internalVal
+            "흡연" -> healthState.smokingTarget = internalVal
+            "카페인" -> healthState.caffeineTarget = internalVal
+            "수면" -> healthState.sleepTarget = internalVal
+            "걸음수" -> healthState.stepsTarget = internalVal
+            "일어서기" -> healthState.standTarget = internalVal
+            "스크린 타임" -> healthState.screenTimeTarget = internalVal
         }
     }
 
     val currentValue = healthState.getTodayValue(itemName)
+    val displayCurrentValue = currentValue * multiplier
     val isManualInput = itemName in listOf("알코올", "흡연", "카페인")
-
-    var expandedPeriod by remember { mutableStateOf(false) }
-    var selectedPeriod by remember { mutableStateOf("단위(일)") }
 
     var showInputDialog by remember { mutableStateOf(false) }
     var manualInputText by remember { mutableStateOf("") }
 
-    val chartData = healthState.getChartData(itemName, selectedPeriod)
+    val rawChartData = healthState.getChartData(itemName, selectedPeriod)
+    val chartData = rawChartData.map { Pair(it.first, it.second * multiplier) }
 
     if (showInputDialog) {
         AlertDialog(
@@ -340,7 +394,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     value = manualInputText,
                     onValueChange = { manualInputText = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    label = { Text("수치 ($unit)") },
+                    label = { Text("수치 ($displayUnit)") },
                     singleLine = true
                 )
             },
@@ -348,7 +402,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 TextButton(onClick = {
                     val parsedValue = manualInputText.toFloatOrNull()
                     if (parsedValue != null) {
-                        healthState.updateRecord(LocalDate.now(), itemName, parsedValue)
+                        healthState.updateRecord(LocalDate.now(), itemName, parsedValue / multiplier)
                     }
                     showInputDialog = false
                 }) {
@@ -382,24 +436,25 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             if (isManualInput) {
                 Text(text = "오늘의 $itemName 기록 입력", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
 
-                val dynamicSliderMax = max(targetValue, currentValue).coerceAtLeast(1f)
+                val dynamicSliderMax = max(displayTargetValue, displayCurrentValue).coerceAtLeast(1f * multiplier)
 
                 Slider(
-                    value = currentValue.coerceIn(0f, dynamicSliderMax),
-                    onValueChange = { newVal -> healthState.updateRecord(LocalDate.now(), itemName, newVal) },
+                    value = displayCurrentValue.coerceIn(0f, dynamicSliderMax),
+                    onValueChange = { newVal -> healthState.updateRecord(LocalDate.now(), itemName, newVal / multiplier) },
                     valueRange = 0f..dynamicSliderMax,
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    val formattedInputVal = if (displayCurrentValue == displayCurrentValue.toInt().toFloat()) "${displayCurrentValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue)
                     Text(
-                        text = "${currentValue.toInt()} $unit",
+                        text = "$formattedInputVal $displayUnit",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
                             .clickable {
-                                manualInputText = currentValue.toInt().toString()
+                                manualInputText = formattedInputVal
                                 showInputDialog = true
                             }
                             .background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp))
@@ -411,14 +466,28 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 Text(text = "현재 기록된 수치 (자동 연동)", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
                 Spacer(modifier = Modifier.height(8.dp))
                 Box(modifier = Modifier.fillMaxWidth().background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp)).padding(16.dp), contentAlignment = Alignment.Center) {
-                    val formattedVal = if (itemName == "걸음수") "${currentValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", currentValue)
-                    Text(text = "$formattedVal $unit", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    val formattedVal = if (itemName == "걸음수") "${displayCurrentValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue)
+                    Text(text = "$formattedVal $displayUnit", fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                if (isConvertible) {
+                    Box {
+                        OutlinedButton(onClick = { expandedUnit = true }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), modifier = Modifier.height(36.dp)) {
+                            Text(text = "단위($selectedUnit)", color = Color.Black)
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Black)
+                        }
+                        DropdownMenu(expanded = expandedUnit, onDismissRequest = { expandedUnit = false }) {
+                            DropdownMenuItem(text = { Text("단위(잔)") }, onClick = { selectedUnit = "잔"; expandedUnit = false })
+                            DropdownMenuItem(text = { Text("단위(ml)") }, onClick = { selectedUnit = "ml"; expandedUnit = false })
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+
                 Box {
                     OutlinedButton(onClick = { expandedPeriod = true }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), modifier = Modifier.height(36.dp)) {
                         Text(text = selectedPeriod, color = Color.Black)
@@ -438,14 +507,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             Text(text = "목표 $itemName 설정 (메인 화면 최대치 연동)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
             Slider(
-                value = targetValue,
+                value = displayTargetValue,
                 onValueChange = onTargetChange,
-                valueRange = 0f..targetMax,
+                valueRange = 0f..displayTargetMax,
                 colors = SliderDefaults.colors(thumbColor = Color(0xFFD2B48C), activeTrackColor = Color(0xFFD2B48C)),
                 modifier = Modifier.fillMaxWidth()
             )
-            val formattedTarget = if (itemName == "걸음수") "${targetValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", targetValue)
-            Text(text = "$formattedTarget $unit", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            val formattedTarget = if (itemName == "걸음수") "${displayTargetValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayTargetValue)
+            Text(text = "$formattedTarget $displayUnit", fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -553,28 +622,136 @@ fun HealthApiRecord(emoji: String, title: String, value: String, progress: Float
 }
 
 // ==========================================
-// 완벽한 "오늘" 기준 0% 오차 API 연동 함수들
+// 패키지별 분리로 중복을 제거한 걸음수 계산
 // ==========================================
 suspend fun fetchHistoricalSteps(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
     val map = mutableMapOf<LocalDate, Float>()
     try {
-        val zone = ZoneId.systemDefault()
-        val today = LocalDate.now()
+        val zoneId = ZoneId.systemDefault()
+        val today = LocalDate.now(zoneId)
+        val nowInstant = Instant.now()
 
-        // 걸음 수: 매일 00:00부터 23:59까지 하루치만 정확히 명시하여 Aggregate 쿼리
         for (i in 0..days) {
             val date = today.minusDays(i.toLong())
-            val start = date.atStartOfDay(zone).toInstant()
-            // 당일이면 '현재 시간'까지, 과거일이면 '그 날짜의 끝'까지만 긁어옴
-            val end = if (i == 0) Instant.now() else date.plusDays(1).atStartOfDay(zone).toInstant()
+            val startOfDay = date.atStartOfDay(zoneId).toInstant()
+            val endOfDay = date.plusDays(1).atStartOfDay(zoneId).toInstant()
 
-            val request = AggregateRequest(
-                metrics = setOf(StepsRecord.COUNT_TOTAL),
-                timeRangeFilter = TimeRangeFilter.between(start, end)
+            val actualEnd = if (endOfDay.isAfter(nowInstant)) nowInstant else endOfDay
+
+            if (startOfDay.isAfter(actualEnd)) {
+                map[date] = 0f
+                continue
+            }
+
+            val request = ReadRecordsRequest(
+                recordType = StepsRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startOfDay, actualEnd)
             )
-            val response = client.aggregate(request)
-            val count = response[StepsRecord.COUNT_TOTAL] ?: 0L
-            map[date] = count.toFloat()
+
+            val response = client.readRecords(request)
+
+            val stepsByPackage = mutableMapOf<String, Long>()
+            response.records.forEach { record ->
+                val packageName = record.metadata.dataOrigin.packageName
+                stepsByPackage[packageName] = (stepsByPackage[packageName] ?: 0L) + record.count
+            }
+
+            val maxSteps = stepsByPackage.values.maxOrNull() ?: 0L
+            map[date] = maxSteps.toFloat()
+        }
+    } catch (e: Exception) { e.printStackTrace() }
+    return map
+}
+
+// ==========================================
+// ★ 버그 픽스: 24시간 통짜 데이터 걸러내기 및 캡핑(Capping) 적용
+// ==========================================
+suspend fun fetchHistoricalActiveTime(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
+    val map = mutableMapOf<LocalDate, Float>()
+    try {
+        val zoneId = ZoneId.systemDefault()
+        val today = LocalDate.now(zoneId)
+        val nowInstant = Instant.now()
+
+        for (i in 0..days) {
+            val date = today.minusDays(i.toLong())
+            val startOfDay = date.atStartOfDay(zoneId).toInstant()
+            val endOfDay = date.plusDays(1).atStartOfDay(zoneId).toInstant()
+
+            val actualEnd = if (endOfDay.isAfter(nowInstant)) nowInstant else endOfDay
+
+            if (startOfDay.isAfter(actualEnd)) {
+                map[date] = 0f
+                continue
+            }
+
+            val request = ReadRecordsRequest(
+                recordType = StepsRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startOfDay, actualEnd)
+            )
+
+            val response = client.readRecords(request)
+
+            // 1. 주력 앱(가장 걸음수가 많은 앱) 선정
+            val stepsByPackage = mutableMapOf<String, Long>()
+            response.records.forEach { record ->
+                val packageName = record.metadata.dataOrigin.packageName
+                stepsByPackage[packageName] = (stepsByPackage[packageName] ?: 0L) + record.count
+            }
+            val targetPackage = stepsByPackage.maxByOrNull { it.value }?.key
+
+            if (targetPackage == null) {
+                map[date] = 0f
+                continue
+            }
+
+            val targetRecords = response.records.filter { it.metadata.dataOrigin.packageName == targetPackage }
+
+            // 2. 24시간 통짜 요약 데이터 제거
+            // 단일 기록이 4시간(14400초) 이상인 것은 사용자의 상세 활동 시간이 아니라 앱이 임의로 뭉뚱그려놓은 통짜 데이터로 간주합니다.
+            val detailedRecords = targetRecords.filter {
+                Duration.between(it.startTime, it.endTime).seconds < 14400
+            }
+
+            var totalActiveSeconds = 0L
+
+            if (detailedRecords.isEmpty() && targetRecords.isNotEmpty()) {
+                // 통짜 요약 데이터만 있고 상세 데이터가 없는 경우 (만보기 앱 등)
+                // 1보당 평균 보행 시간인 0.8초를 곱하여 현실적인 시간을 추정합니다.
+                val totalSteps = targetRecords.sumOf { it.count }
+                totalActiveSeconds = (totalSteps * 0.8).toLong()
+            } else {
+                // 3. 정상적인 상세 데이터들의 시간 순 정렬 및 Interval Merge (시간 캡핑 적용)
+                val sortedRecords = detailedRecords.sortedBy { it.startTime }
+                var currentEnd = Instant.MIN
+
+                for (record in sortedRecords) {
+                    val start = record.startTime
+                    val end = record.endTime
+
+                    if (end.isAfter(currentEnd)) {
+                        val effectiveStart = if (start.isAfter(currentEnd)) start else currentEnd
+                        val diffSeconds = Duration.between(effectiveStart, end).seconds
+
+                        // 아무리 느려도 1보당 2초를 초과하여 걷기 힘들다는 현실적인 한계 적용 (데이터 뻥튀기 방어)
+                        val maxPlausibleSeconds = record.count * 2L
+
+                        val durationSeconds = if (diffSeconds == 0L && record.count > 0) {
+                            10L // 동시 기록이라도 걸음이 있으면 최소 10초 부여
+                        } else {
+                            minOf(diffSeconds, maxPlausibleSeconds)
+                        }
+
+                        totalActiveSeconds += durationSeconds
+
+                        // 보정된 실제 활동 시간만큼만 종료 시간을 밀어주어 다음 구간 검사에 활용
+                        currentEnd = effectiveStart.plusSeconds(durationSeconds)
+                    }
+                }
+            }
+
+            // 초 단위를 시간 단위(0.0~24.0)로 변환
+            map[date] = totalActiveSeconds.toFloat() / 3600f
         }
     } catch (e: Exception) { e.printStackTrace() }
     return map
@@ -583,22 +760,23 @@ suspend fun fetchHistoricalSteps(client: HealthConnectClient, days: Int): Map<Lo
 suspend fun fetchHistoricalSleep(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
     val map = mutableMapOf<LocalDate, Float>()
     try {
-        val zone = ZoneId.systemDefault()
-        val today = LocalDate.now()
+        val zoneId = ZoneId.systemDefault()
+        val today = LocalDate.now(zoneId)
+        val nowInstant = Instant.now()
 
         for (i in 0..days) {
             val date = today.minusDays(i.toLong())
-            // 수면: 전날 낮 12시부터 당일 낮 12시까지를 '그 날의 수면'으로 엄격히 정의
-            val start = date.minusDays(1).atTime(12, 0).atZone(zone).toInstant()
-            val end = date.atTime(12, 0).atZone(zone).toInstant()
-            val actualEnd = if (end.isAfter(Instant.now())) Instant.now() else end
+            val start = date.minusDays(1).atTime(12, 0).atZone(zoneId).toInstant()
+            val end = date.atTime(12, 0).atZone(zoneId).toInstant()
+            val actualEnd = if (end.isAfter(nowInstant)) nowInstant else end
+
+            if (start.isAfter(actualEnd)) continue
 
             val response = client.readRecords(ReadRecordsRequest(
                 recordType = SleepSessionRecord::class,
                 timeRangeFilter = TimeRangeFilter.between(start, actualEnd)
             ))
 
-            // 수면 중복 병합: 워치와 폰이 동시에 켜져 교집합으로 기록된 시간은 하나로 통합(Interval Merge)
             val sorted = response.records.sortedBy { it.startTime }
             var totalMinutes = 0L
             var currentEnd = Instant.MIN
@@ -620,53 +798,38 @@ fun fetchHistoricalScreenTime(context: Context, days: Int): Map<LocalDate, Float
     val map = mutableMapOf<LocalDate, Float>()
     try {
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val zone = ZoneId.systemDefault()
-        val today = LocalDate.now()
+        val packageManager = context.packageManager
+        val zoneId = ZoneId.systemDefault()
+        val today = LocalDate.now(zoneId)
+
+        val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
+        val launchers = packageManager.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }.toSet()
+
+        val systemPackages = setOf(
+            "com.android.systemui",
+            "com.android.settings",
+            "android",
+            "com.samsung.android.app.aodservice",
+            "com.samsung.android.app.cocktailbarservice"
+        )
 
         for (i in 0..days) {
             val date = today.minusDays(i.toLong())
-            val startMilli = date.atStartOfDay(zone).toInstant().toEpochMilli()
-            val endMilli = if (i == 0) System.currentTimeMillis() else date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            val startMilli = date.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val endMilli = if (i == 0) System.currentTimeMillis() else date.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
 
-            // 스크린 타임: 앱들의 사용 시간을 더하는 것이 아니라 "화면이 켜져서 상호작용한 시간(SCREEN_INTERACTIVE)"만 추적
-            val events = usageStatsManager.queryEvents(startMilli, endMilli)
-            val event = android.app.usage.UsageEvents.Event()
+            val stats = usageStatsManager.queryAndAggregateUsageStats(startMilli, endMilli)
 
-            var totalScreenTime = 0L
-            var lastInteractiveTime = 0L
-            var isInteractive = false
-
-            while (events.hasNextEvent()) {
-                events.getNextEvent(event)
-                if (event.eventType == android.app.usage.UsageEvents.Event.SCREEN_INTERACTIVE) {
-                    isInteractive = true
-                    lastInteractiveTime = event.timeStamp
-                } else if (event.eventType == android.app.usage.UsageEvents.Event.SCREEN_NON_INTERACTIVE) {
-                    if (isInteractive && lastInteractiveTime > 0) {
-                        totalScreenTime += (event.timeStamp - lastInteractiveTime)
-                        isInteractive = false
-                    }
+            var totalTime = 0L
+            for ((packageName, stat) in stats) {
+                if (stat.totalTimeInForeground > 0 &&
+                    !launchers.contains(packageName) &&
+                    !systemPackages.contains(packageName)
+                ) {
+                    totalTime += stat.totalTimeInForeground
                 }
             }
-            // 검색 종료 시점까지 아직 폰 화면이 켜져 있는 경우 마지막 시간 추가
-            if (isInteractive && lastInteractiveTime > 0) {
-                totalScreenTime += (endMilli - lastInteractiveTime)
-            }
-
-            // 만약 기기 제조사 문제로 이벤트 추적이 막혀 0이 나올 경우를 대비한 안전 장치(폴백)
-            if (totalScreenTime == 0L) {
-                val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
-                val launchers = context.packageManager.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }.toSet()
-                val stats = usageStatsManager.queryAndAggregateUsageStats(startMilli, endMilli)
-                for ((packageName, stat) in stats) {
-                    if (stat.totalTimeInForeground > 0 && !launchers.contains(packageName)) {
-                        totalScreenTime += stat.totalTimeInForeground
-                    }
-                }
-                totalScreenTime = totalScreenTime.coerceAtMost(24L * 60 * 60 * 1000) // 최대 24시간 초과 방지
-            }
-
-            map[date] = totalScreenTime.toFloat() / (1000f * 60f * 60f)
+            map[date] = totalTime.toFloat() / (1000f * 60f * 60f)
         }
     } catch (e: Exception) { e.printStackTrace() }
     return map
