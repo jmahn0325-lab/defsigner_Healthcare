@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,9 +40,7 @@ fun TopSpectrumBanner(onClick: () -> Unit = {}) {
 
 @Composable
 fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: Float, maxValue: Float, onValueChange: (Float) -> Unit, onClick: () -> Unit = {}) {
-    var tempValue by remember(value) { mutableFloatStateOf(value) }
-    val dynamicMax = max(maxValue, tempValue).coerceAtLeast(1f)
-    val hasChanges = tempValue > value
+    val dynamicMax = max(maxValue, value).coerceAtLeast(1f)
 
     Box(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Gray).clickable { onClick() }.padding(12.dp)) {
         Column {
@@ -52,33 +50,11 @@ fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: 
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(text = title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
-                val displayValue = if (hasChanges) tempValue else value
-                Text(text = "${displayValue.toInt()}$valueSuffix", fontSize = 14.sp, color = if(displayValue > maxValue) Color.Red else Color.Black)
+                Text(text = "${value.toInt()}$valueSuffix", fontSize = 14.sp, color = if(value > maxValue) Color.Red else Color.Black)
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Slider(
-                value = tempValue.coerceIn(value, dynamicMax),
-                onValueChange = { newVal ->
-                    if (newVal >= value) {
-                        tempValue = newVal
-                    }
-                },
-                valueRange = 0f..dynamicMax,
-                modifier = Modifier.height(24.dp)
-            )
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "Max: ${maxValue.toInt()}$valueSuffix", fontSize = 10.sp, color = Color.Gray)
-                if (hasChanges) {
-                    Button(
-                        onClick = { onValueChange(tempValue) },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        modifier = Modifier.height(28.dp),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Text("저장", fontSize = 12.sp)
-                    }
-                }
-            }
+            Slider(value = value.coerceIn(0f, dynamicMax), onValueChange = onValueChange, valueRange = 0f..dynamicMax, modifier = Modifier.height(24.dp))
+            Text(text = "Max: ${maxValue.toInt()}$valueSuffix", fontSize = 10.sp, color = Color.Gray, modifier = Modifier.align(Alignment.End))
         }
     }
 }

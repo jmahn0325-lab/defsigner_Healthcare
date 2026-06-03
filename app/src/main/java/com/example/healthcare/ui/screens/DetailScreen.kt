@@ -81,9 +81,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     val displayCurrentValue = currentValue * multiplier
     val isManualInput = itemName in listOf("알코올", "흡연", "카페인")
 
-    var tempDisplayValue by remember(displayCurrentValue) { mutableFloatStateOf(displayCurrentValue) }
-    val hasSliderChanges = tempDisplayValue > displayCurrentValue
-
     var showInputDialog by remember { mutableStateOf(false) }
     var manualInputText by remember { mutableStateOf("") }
 
@@ -107,8 +104,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 TextButton(onClick = {
                     val parsedValue = manualInputText.toFloatOrNull()
                     if (parsedValue != null) {
-                        val finalValue = max(parsedValue, displayCurrentValue)
-                        healthState.updateRecord(LocalDate.now(), itemName, finalValue / multiplier)
+                        healthState.updateRecord(LocalDate.now(), itemName, parsedValue / multiplier)
                     }
                     showInputDialog = false
                 }) { Text("확인") }
@@ -135,31 +131,17 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
             if (isManualInput) {
                 Text(text = "오늘의 $itemName 기록 입력", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
-                val dynamicSliderMax = max(displayTargetValue, tempDisplayValue).coerceAtLeast(1f * multiplier)
+                val dynamicSliderMax = max(displayTargetValue, displayCurrentValue).coerceAtLeast(1f * multiplier)
 
                 Slider(
-                    value = tempDisplayValue.coerceIn(displayCurrentValue, dynamicSliderMax),
-                    onValueChange = { newVal ->
-                        if (newVal >= displayCurrentValue) {
-                            tempDisplayValue = newVal
-                        }
-                    },
+                    value = displayCurrentValue.coerceIn(0f, dynamicSliderMax),
+                    onValueChange = { newVal -> healthState.updateRecord(LocalDate.now(), itemName, newVal / multiplier) },
                     valueRange = 0f..dynamicSliderMax,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                if (hasSliderChanges) {
-                    Button(
-                        onClick = { healthState.updateRecord(LocalDate.now(), itemName, tempDisplayValue / multiplier) },
-                        modifier = Modifier.align(Alignment.End).padding(bottom = 8.dp)
-                    ) {
-                        Text("저장")
-                    }
-                }
-
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    val displayValToFormat = if (hasSliderChanges) tempDisplayValue else displayCurrentValue
-                    val formattedInputVal = if (displayValToFormat == displayValToFormat.toInt().toFloat()) "${displayValToFormat.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayValToFormat)
+                    val formattedInputVal = if (displayCurrentValue == displayCurrentValue.toInt().toFloat()) "${displayCurrentValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue)
                     Text(
                         text = "$formattedInputVal $displayUnit",
                         fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
