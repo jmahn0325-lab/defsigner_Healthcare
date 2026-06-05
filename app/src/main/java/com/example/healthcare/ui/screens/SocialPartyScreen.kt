@@ -403,17 +403,18 @@ fun MemberDetailDialog(
                                     }
                                     if (member.uid != myUid) {
                                         IconButton(onClick = {
+                                            // 1. 클릭 즉시 발신자 화면에 Toast 표시
+                                            Toast.makeText(context, "${member.displayName}님에게 콕 찌르기(${factor})를 했습니다", Toast.LENGTH_SHORT).show()
+                                            
                                             scope.launch {
-                                                val success = repository.sendNudge(myUid, member.uid, factor)
-                                                if (success) {
-                                                    Toast.makeText(context, "${factor} 항목을 콕 찔렀습니다!", Toast.LENGTH_SHORT).show()
-                                                }
+                                                // 2. 백엔드/클라우드 함수 트리거를 위한 데이터 기록
+                                                repository.sendNudge(myUid, member.uid, factor)
                                             }
                                         }) {
                                             Icon(
                                                 Icons.Default.NotificationsActive,
                                                 contentDescription = "콕 찌르기",
-                                                tint = if (score < 60) Color.Red else Color.Gray
+                                                tint = if (score < -10) Color.Red else Color.Gray
                                             )
                                         }
                                     }

@@ -316,20 +316,64 @@ class SocialRepository {
 
     // --- 4. 항목별 콕 찌르기 (Nudge) 기록 ---
 
+    /**
+     * 콕 찌르기 수행: DB 기록 및 알림 큐 등록
+     * 기존 Interactions 기록 외에 Notifications 컬렉션에 추가하여 
+     * 클라우드 함수 등이 이를 감지하고 실제 FCM을 발송할 수 있게 합니다.
+     */
     suspend fun sendNudge(senderId: String, receiverId: String, factor: String): Boolean {
         return try {
+            val timestamp = FieldValue.serverTimestamp()
+            
+            // 발신자 이름 조회 (알림 내용 구성용)
+            val senderDoc = db.collection("Users").document(senderId).get().await()
+            val senderName = senderDoc.getString("displayName") ?: "누군가"
+            
+            // 1. Interactions 기록 (기존 기능 유지)
             val nudgeData = mapOf<String, Any>(
                 "senderId" to senderId,
+                "senderName" to senderName,
                 "receiverId" to receiverId,
                 "targetFactor" to factor,
-                "timestamp" to FieldValue.serverTimestamp()
+                "timestamp" to timestamp
             )
-            
-            // Interactions 컬렉션에 기록 (FCM 트리거용)
             db.collection("Interactions").add(nudgeData).await()
+
+            // 2. 실제 푸시 알림 발송을 위한 대기열(Queue) 등록
+            val receiverToken = getUserFcmToken(receiverId)
+            if (receiverToken != null) {
+                // 요구사항에 맞춘 타이틀 구성: "A님에게 콕 찌르기(항목이름)가 왔습니다"
+                val notificationTitle = "${senderName}님에게 콕 찌르기(${factor})가 왔습니다"
+                val nudgeType = NudgeType.fromString(factor)
+                
+                val notificationData = mapOf(
+                    "to" to receiverToken,
+                    "title" to notificationTitle,
+                    "body" to NudgeMessageProvider.getRandomBody(nudgeType),
+                    "senderId" to senderId,
+                    "receiverId" to receiverId,
+                    "status" to "pending",
+                    "timestamp" to timestamp
+                )
+                db.collection("Notifications").add(notificationData).await()
+            }
+            
             true
         } catch (e: Exception) {
+            Log.e("SocialRepository", "Error sending nudge", e)
             false
+        }
+    }
+
+    /**
+     * 콕 찌르기 알림을 위한 유저 토큰 조회
+     */
+    suspend fun getUserFcmToken(uid: String): String? {
+        return try {
+            val doc = db.collection("Users").document(uid).get().await()
+            doc.getString("fcmToken")
+        } catch (e: Exception) {
+            null
         }
     }
 
