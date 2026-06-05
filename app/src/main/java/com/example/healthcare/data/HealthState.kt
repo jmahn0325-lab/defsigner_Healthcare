@@ -368,7 +368,14 @@ class HealthState private constructor(private val context: Context?) {
                 .map { (name, list) ->
                     val countSum = list.sumOf { it.beverageCount!!.toDouble() }.toFloat()
                     val countStr = if (countSum == countSum.toInt().toFloat()) "${countSum.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", countSum)
-                    "$name ${countStr}회" 
+                    
+                    // BeverageType 리스트에서 단위를 찾아오기 (없으면 기본값 "회")
+                    val unit = when (type) {
+                        "알코올" -> alcoholTypes.find { it.name == name }?.unit ?: "회"
+                        "카페인" -> caffeineTypes.find { it.name == name }?.unit ?: "회"
+                        else -> "회"
+                    }
+                    "$name $countStr$unit"
                 }.joinToString(", ")
 
             HealthRecord(

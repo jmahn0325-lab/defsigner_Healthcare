@@ -589,7 +589,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             if (hasPenaltyDetails) {
                 Spacer(modifier = Modifier.height(32.dp))
                 Text(
-                    text = if (itemName == "수면") "일자별 수면 점수 내역 (최근 3일)" else "시점별 감점 상세 내역 (최근 3일)",
+                    text = if (itemName == "수면") "일자별 수면 점수 내역 (최근 3일)" else "시점별 감점 상세 내역 (최근 7일)",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -642,19 +642,17 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                                 }
                                             } else ""
                                             
+                                            val logText = if (detail.beverageInfo != null) {
+                                                "${detail.beverageInfo} (${formattedValue}$unitInDetail)$penaltyLabel"
+                                            } else {
+                                                "기록: ${formattedValue}$unitInDetail$penaltyLabel"
+                                            }
+                                            
                                             Text(
-                                                text = "기록: $formattedValue$unitInDetail$penaltyLabel",
+                                                text = logText,
                                                 fontSize = 12.sp,
                                                 color = if (detail.isOverThreshold && itemName != "수면") Color(0xFFD32F2F) else Color.Gray
                                             )
-                                            detail.beverageInfo?.let {
-                                                Text(
-                                                    text = "세부: $it",
-                                                    fontSize = 12.sp,
-                                                    color = Color.Gray,
-                                                    modifier = Modifier.padding(top = 2.dp)
-                                                )
-                                            }
                                         }
                                         Text(
                                             text = String.format("%.2f점", detail.currentPenalty),
