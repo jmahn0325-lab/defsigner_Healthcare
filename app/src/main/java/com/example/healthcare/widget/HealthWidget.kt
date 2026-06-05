@@ -245,7 +245,19 @@ class IncrementAction : ActionCallback {
         val manualTypes = listOf("알코올", "흡연", "카페인")
         if (type in manualTypes) {
             val currentValue = healthState.getTodayValue(type)
-            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, type, currentValue + incrementAmount)
+            val selectedBeverage = when (type) {
+                "알코올" -> healthState.selectedAlcoholType
+                "카페인" -> healthState.selectedCaffeineType
+                else -> null
+            }
+            healthState.updateManualRecord(
+                LocalDate.now(), 
+                LocalTime.now().hour, 
+                type, 
+                currentValue + incrementAmount,
+                beverageName = selectedBeverage?.name,
+                beverageCount = 1f
+            )
         } else {
             val currentValue = healthState.getTodayValue(type)
             healthState.updateAutoRecord(LocalDate.now(), type, currentValue + incrementAmount)

@@ -328,7 +328,24 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
                         val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
                         if (isManualInput) {
-                            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, finalDisplayValue * displayToInternalMultiplier)
+                            val delta = finalDisplayValue - displayCurrentValue
+                            if (isConvertible && selectedUnit == "잔" && delta > 0) {
+                                healthState.updateManualRecord(
+                                    LocalDate.now(), 
+                                    LocalTime.now().hour, 
+                                    itemName, 
+                                    finalDisplayValue * displayToInternalMultiplier,
+                                    beverageName = selectedType.name,
+                                    beverageCount = delta
+                                )
+                            } else {
+                                healthState.updateManualRecord(
+                                    LocalDate.now(), 
+                                    LocalTime.now().hour, 
+                                    itemName, 
+                                    finalDisplayValue * displayToInternalMultiplier
+                                )
+                            }
                         } else {
                             healthState.updateAutoRecord(LocalDate.now(), itemName, finalDisplayValue * displayToInternalMultiplier)
                         }
@@ -448,7 +465,24 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     Button(
                         onClick = { 
                             val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
-                            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, tempDisplayValue * displayToInternalMultiplier) 
+                            val delta = tempDisplayValue - displayCurrentValue
+                            if (isConvertible && selectedUnit == "잔" && delta > 0) {
+                                healthState.updateManualRecord(
+                                    LocalDate.now(), 
+                                    LocalTime.now().hour, 
+                                    itemName, 
+                                    tempDisplayValue * displayToInternalMultiplier,
+                                    beverageName = selectedType.name,
+                                    beverageCount = delta
+                                )
+                            } else {
+                                healthState.updateManualRecord(
+                                    LocalDate.now(), 
+                                    LocalTime.now().hour, 
+                                    itemName, 
+                                    tempDisplayValue * displayToInternalMultiplier
+                                )
+                            }
                             updateWidgets()
                         },
                         modifier = Modifier.align(Alignment.End).padding(bottom = 8.dp)
@@ -555,7 +589,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             if (hasPenaltyDetails) {
                 Spacer(modifier = Modifier.height(32.dp))
                 Text(
-                    text = if (itemName == "수면") "일자별 수면 점수 내역 (최근 7일)" else "시점별 감점 상세 내역 (최근 7일)",
+                    text = if (itemName == "수면") "일자별 수면 점수 내역 (최근 3일)" else "시점별 감점 상세 내역 (최근 3일)",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -613,6 +647,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                                 fontSize = 12.sp,
                                                 color = if (detail.isOverThreshold && itemName != "수면") Color(0xFFD32F2F) else Color.Gray
                                             )
+                                            detail.beverageInfo?.let {
+                                                Text(
+                                                    text = "세부: $it",
+                                                    fontSize = 12.sp,
+                                                    color = Color.Gray,
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                )
+                                            }
                                         }
                                         Text(
                                             text = String.format("%.2f점", detail.currentPenalty),

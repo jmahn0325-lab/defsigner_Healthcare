@@ -16,7 +16,14 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 // hour(시간) 속성이 추가되었습니다. (수동 입력은 0~23, 자동 연동 데이터는 null)
-data class HealthRecord(val date: LocalDate, val hour: Int?, val type: String, val value: Float)
+data class HealthRecord(
+    val date: LocalDate,
+    val hour: Int?,
+    val type: String,
+    val value: Float,
+    val beverageName: String? = null,
+    val beverageCount: Float? = null
+)
 
 // 제품 종류 정보를 저장하는 데이터 클래스 (단위 unit 추가)
 data class BeverageType(val name: String, val content: Float, val unit: String)
@@ -26,7 +33,8 @@ data class PenaltyDetail(
     val dateTime: LocalDateTime,
     val originalValue: Float,
     val isOverThreshold: Boolean,
-    val currentPenalty: Float
+    val currentPenalty: Float,
+    val beverageInfo: String? = null
 )
 
 class HealthState private constructor(private val context: Context?) {
@@ -81,6 +89,8 @@ class HealthState private constructor(private val context: Context?) {
             obj.put("hour", record.hour ?: -1)
             obj.put("type", record.type)
             obj.put("value", record.value.toDouble())
+            record.beverageName?.let { obj.put("beverageName", it) }
+            record.beverageCount?.let { obj.put("beverageCount", it.toDouble()) }
             jsonArray.put(obj)
         }
         
@@ -107,7 +117,9 @@ class HealthState private constructor(private val context: Context?) {
                     LocalDate.parse(obj.getString("date")),
                     if (hourVal == -1) null else hourVal,
                     obj.getString("type"),
-                    obj.getDouble("value").toFloat()
+                    obj.getDouble("value").toFloat(),
+                    if (obj.has("beverageName")) obj.getString("beverageName") else null,
+                    if (obj.has("beverageCount")) obj.getDouble("beverageCount").toFloat() else null
                 ))
             }
 
@@ -128,12 +140,12 @@ class HealthState private constructor(private val context: Context?) {
     }
 
     // 수동 입력 데이터 (알코올, 흡연 등)는 기존 총량과의 차이(Delta)를 구해 특정 시간에 누적합니다.
-    fun updateManualRecord(date: LocalDate, hour: Int?, type: String, newValue: Float) {
+    fun updateManualRecord(date: LocalDate, hour: Int?, type: String, newValue: Float, beverageName: String? = null, beverageCount: Float? = null) {
         loadFromStorage() // 최신 데이터 동기화
         val currentTotal = getTodayValue(type)
         val delta = newValue - currentTotal
         if (delta > 0f) {
-            _records.add(HealthRecord(date, hour, type, delta))
+            _records.add(HealthRecord(date, hour, type, delta, beverageName, beverageCount))
             saveToStorage()
         }
     }
@@ -340,8 +352,33 @@ class HealthState private constructor(private val context: Context?) {
 
         val now = LocalDateTime.now()
         val sevenDaysAgo = now.minusDays(7)
-        val manualRecords = _records.filter { it.type == type && it.hour != null && it.value > 0f }
-            .sortedWith(compareBy({ it.date }, { it.hour }))
+        
+        // 1. 해당 타입의 모든 수동 기록 필터링
+        val rawManualRecords = _records.filter { it.type == type && it.hour != null && it.value > 0f }
+        
+        // 2. 같은 날짜, 같은 시간의 기록들을 하나로 병합
+        val groupedRecords = rawManualRecords.groupBy { it.date to it.hour }
+        val manualRecords = groupedRecords.map { (key, records) ->
+            val (date, hour) = key
+            val totalValue = records.sumOf { it.value.toDouble() }.toFloat()
+            
+            // 음료 종류별로 합산하여 문자열 생성 (예: 소주 1잔, 맥주 2잔)
+            val beverageSummary = records.filter { it.beverageName != null && it.beverageCount != null }
+                .groupBy { it.beverageName!! }
+                .map { (name, list) ->
+                    val countSum = list.sumOf { it.beverageCount!!.toDouble() }.toFloat()
+                    val countStr = if (countSum == countSum.toInt().toFloat()) "${countSum.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", countSum)
+                    "$name ${countStr}회" 
+                }.joinToString(", ")
+
+            HealthRecord(
+                date = date,
+                hour = hour,
+                type = type,
+                value = totalValue,
+                beverageName = if (beverageSummary.isEmpty()) null else beverageSummary
+            )
+        }.sortedWith(compareBy({ it.date }, { it.hour }))
         
         var sessionIntake = 0f // 세션 내 누적 섭취량 (임계치 체크용)
         var lastIntakeTime: LocalDateTime? = null
@@ -402,7 +439,8 @@ class HealthState private constructor(private val context: Context?) {
                 dateTime = recordDateTime,
                 originalValue = record.value,
                 isOverThreshold = isBingeRecord,
-                currentPenalty = currentPenalty
+                currentPenalty = currentPenalty,
+                beverageInfo = record.beverageName
             )
         }
     }
