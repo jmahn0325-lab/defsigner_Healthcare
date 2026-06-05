@@ -424,8 +424,9 @@ fun MemberDetailDialog(
                                         Box {
                                             Column(
                                                 modifier = Modifier
-                                                    .padding(12.dp)
+                                                    .fillMaxSize()
                                                     .verticalScroll(logScrollState)
+                                                    .padding(12.dp)
                                             ) {
                                                 logs.forEach { log ->
                                                     Text(
