@@ -226,27 +226,8 @@ class SocialRepository {
                 allRawRecords.addAll(rawRecords)
             }
 
-            // 폭주 패널티 판정을 위한 세션 누적용 맵 (사용자 성별 정보가 없으므로 보수적 기준 적용)
-            val sessionIntakeMap = mutableMapOf<String, Float>()
-            val lastIntakeTimeMap = mutableMapOf<String, java.time.LocalDateTime>()
-
-            // 시간순(오름차순)으로 먼저 정렬하여 세션 누적량 계산 (패널티 판정용)
-            val chronologicalRecords = allRawRecords.mapNotNull { recordMap ->
-                val recordDateStr = recordMap["date"] as? String ?: return@mapNotNull null
-                val hour = (recordMap["hour"] as? Number)?.toInt() ?: 0
-                val minute = (recordMap["minute"] as? Number)?.toInt() ?: 0
-                val second = (recordMap["second"] as? Number)?.toInt() ?: 0
-                val type = recordMap["type"] as? String ?: return@mapNotNull null
-                
-                try {
-                    val dt = java.time.LocalDate.parse(recordDateStr).atTime(hour, minute, second)
-                    Triple(dt, type, recordMap)
-                } catch (e: Exception) { null }
-            }.sortedBy { it.first }
-
-            chronologicalRecords.forEach { (recordDateTime, type, recordMap) ->
-                // 알코올, 카페인, 흡연 항목만 필터링
-                if (type != "알코올" && type != "카페인" && type != "흡연") return@forEach
+            allRawRecords.forEach { recordMap ->
+                val type = recordMap["type"] as? String ?: return@forEach
 
                 val isVisible = when (type) {
                     "알코올" -> privacy.alcoholVisible
@@ -259,6 +240,7 @@ class SocialRepository {
                     val itemName = recordMap["itemName"] as? String
                     val unit = recordMap["unit"] as? String
                     val value = (recordMap["value"] as? Number)?.toFloat() ?: 0f
+                    val isBingeStored = recordMap["isBinge"] as? Boolean ?: false // 서버에 저장된 정확한 패널티 정보 사용
                     
                     // 24시간 내 섭취량 합산
                     if (recordDateTime.isAfter(twentyFourHoursAgo)) {
@@ -278,7 +260,7 @@ class SocialRepository {
                         val dateStr = recordDateTime.format(java.time.format.DateTimeFormatter.ofPattern("MM/dd"))
                         val fullTimePrefix = "$dateStr $timeStr\n"
 
-                        // 비율 및 폭주 임계치 설정
+                        // 비율 추론 (기존 로직 유지)
                         val ratio = when(itemName) {
                             "소주" -> 6.3f
                             "맥주" -> 7.1f
@@ -286,39 +268,17 @@ class SocialRepository {
                             "아메리카노" -> 150f
                             "에너지 드링크" -> 100f
                             "녹차" -> 30f
-                            "담배" -> 1f // 개비수 -> mg 변환 (기존 로직이 개비당 1개비 가중치였으나 요청에 따라 mg 개념 도입 가능)
                             else -> 1f
                         }
                         
-                        // 흡연의 경우 1개비당 약 1mg로 표시 (요청사항 반영)
-                        val displayValue = if (type == "흡연") value else value
                         val displayIntake = if (type == "흡연") "${value.toInt()}mg" else "${value.toInt()}$contentUnit"
 
                         val count = value / ratio
                         val countStr = if (count % 1f == 0f) "${count.toInt()}" else String.format(Locale.getDefault(), "%.1f", count)
                         
-                        // 패널티 판정 로직 (HealthState 로직 모사)
-                        val lastTime = lastIntakeTimeMap[type]
-                        if (lastTime != null && java.time.Duration.between(lastTime, recordDateTime).toHours() >= 24) {
-                            sessionIntakeMap[type] = 0f
-                        }
-                        
-                        val threshold = when(type) {
-                            "알코올" -> 20f // 여성 기준 보수적 적용
-                            "카페인" -> 300f
-                            "흡연" -> 7f
-                            else -> 1000f
-                        }
-                        
-                        val currentSessionIntake = sessionIntakeMap.getOrDefault(type, 0f)
-                        val isPenalty = currentSessionIntake + value > threshold
-                        
-                        sessionIntakeMap[type] = currentSessionIntake + value
-                        lastIntakeTimeMap[type] = recordDateTime
+                        // 서버에서 직접 가져온 패널티 여부 적용
+                        val penaltyTag = if (isBingeStored) " (폭주 패널티)" else ""
 
-                        val penaltyTag = if (isPenalty) " (폭주 패널티)" else ""
-
-                        // 이모지 제거 (요청사항 2번: 카테고리 헤더로 이동)
                         val logString = "$fullTimePrefix$itemName ${countStr}$unit / $displayIntake$penaltyTag"
                         
                         val sortKey = "${recordMap["date"]}_${String.format(Locale.getDefault(), "%02d:%02d:%02d", recordDateTime.hour, recordDateTime.minute, recordDateTime.second)}"
@@ -402,7 +362,8 @@ class SocialRepository {
                         "hour" to record.hour,
                         "minute" to record.minute,
                         "second" to record.second,
-                        "date" to record.date.toString()
+                        "date" to record.date.toString(),
+                        "isBinge" to record.isBinge // 패널티 여부 서버 동기화
                     )
                 }
             )

@@ -23,11 +23,12 @@ data class HealthRecord(
     val date: LocalDate,
     val hour: Int?,
     val minute: Int? = null,
-    val second: Int? = null, // 추가: 초 (0~59)
+    val second: Int? = null,
     val type: String,
     val value: Float,
     val itemName: String? = null,
-    val unit: String? = null
+    val unit: String? = null,
+    val isBinge: Boolean = false // 추가: 폭주 패널티 여부 저장
 )
 
 // 제품 종류 정보를 저장하는 데이터 클래스 (단위 unit 추가)
@@ -104,6 +105,7 @@ class HealthState private constructor(private val context: Context?) {
             obj.put("second", record.second ?: -1)
             obj.put("type", record.type)
             obj.put("value", record.value.toDouble())
+            obj.put("isBinge", record.isBinge) // 저장
             record.itemName?.let { obj.put("itemName", it) }
             record.unit?.let { obj.put("unit", it) }
             jsonArray.put(obj)
@@ -138,7 +140,8 @@ class HealthState private constructor(private val context: Context?) {
                     type = obj.getString("type"),
                     value = obj.getDouble("value").toFloat(),
                     itemName = obj.optString("itemName").let { if (it.isEmpty()) null else it },
-                    unit = obj.optString("unit").let { if (it.isEmpty()) null else it }
+                    unit = obj.optString("unit").let { if (it.isEmpty()) null else it },
+                    isBinge = obj.optBoolean("isBinge", false) // 불러오기
                 ))
             }
 
@@ -164,7 +167,18 @@ class HealthState private constructor(private val context: Context?) {
         val currentTotal = getTodayValue(type)
         val delta = newValue - currentTotal
         if (delta > 0f) {
-            _records.add(HealthRecord(date, hour, minute, second, type, delta, itemName, unit))
+            // 새 레코드를 임시 추가하여 패널티 상태를 정확히 계산
+            val tempRecord = HealthRecord(date, hour, minute, second, type, delta, itemName, unit, false)
+            _records.add(tempRecord)
+            
+            // PenaltyDetails를 통해 방금 추가된 레코드의 isOverThreshold 값을 확인
+            val details = getPenaltyDetails(type)
+            val isBinge = details.lastOrNull()?.isOverThreshold ?: false
+            
+            // _records에서 방금 추가한 임시 레코드를 삭제하고 isBinge 정보가 포함된 진짜 레코드 추가
+            _records.removeAt(_records.size - 1)
+            _records.add(tempRecord.copy(isBinge = isBinge))
+
             saveToStorage()
         }
     }
