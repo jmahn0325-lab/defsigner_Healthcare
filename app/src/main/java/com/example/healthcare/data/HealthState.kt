@@ -2,11 +2,14 @@ package com.example.healthcare.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.DayOfWeek
@@ -30,7 +33,8 @@ data class PenaltyDetail(
 )
 
 class HealthState private constructor(private val context: Context?) {
-    var userId by mutableStateOf("guest_user") // Firebase Auth 연동 전 임시 ID
+    var userId by mutableStateOf("guest_user")
+    var userName by mutableStateOf("")
     var gender by mutableStateOf("Male")
     var isOnboardingCompleted by mutableStateOf(false)
 
@@ -236,6 +240,7 @@ class HealthState private constructor(private val context: Context?) {
 
     fun saveProfile() {
         prefs?.edit()?.apply {
+            putString("userName", userName)
             putString("gender", gender)
             putBoolean("isOnboardingCompleted", isOnboardingCompleted)
             putFloat("activityTarget", activityTarget)
@@ -249,6 +254,12 @@ class HealthState private constructor(private val context: Context?) {
     }
 
     fun loadSelections() {
+        // UID 결정 로직
+        userId = Firebase.auth.currentUser?.uid 
+            ?: context?.let { Settings.Secure.getString(it.contentResolver, Settings.Secure.ANDROID_ID) }
+            ?: "guest_user"
+
+        userName = prefs?.getString("userName", "") ?: ""
         val alcoholName = prefs?.getString("selection_알코올", "소주") ?: "소주"
         alcoholTypes.find { it.name == alcoholName }?.let { selectedAlcoholType = it }
         

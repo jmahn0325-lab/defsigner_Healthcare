@@ -17,6 +17,7 @@ import com.example.healthcare.ui.screens.DetailScreen
 import com.example.healthcare.ui.screens.MainHealthSpectrumScreen
 import com.example.healthcare.ui.screens.OnboardingScreen
 import com.example.healthcare.ui.screens.SocialPartyScreen
+import com.example.healthcare.ui.screens.UserNameSettingScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,9 +42,23 @@ fun HealthApp() {
     // 싱글톤 인스턴스를 가져오고 초기화합니다.
     val healthState = remember { HealthState.getInstance(context) }
 
-    val startDestination = if (healthState.isOnboardingCompleted) "main" else "onboarding"
+    val startDestination = when {
+        healthState.userName.isBlank() -> "nameSetting"
+        !healthState.isOnboardingCompleted -> "onboarding"
+        else -> "main"
+    }
 
     NavHost(navController = navController, startDestination = startDestination) {
+        composable("nameSetting") {
+            UserNameSettingScreen(
+                healthState = healthState,
+                onComplete = {
+                    navController.navigate("onboarding") {
+                        popUpTo("nameSetting") { inclusive = true }
+                    }
+                }
+            )
+        }
         composable("onboarding") {
             OnboardingScreen(
                 healthState = healthState,

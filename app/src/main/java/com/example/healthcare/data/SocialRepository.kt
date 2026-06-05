@@ -215,4 +215,22 @@ class SocialRepository {
             false
         }
     }
+
+    // 신규 유저 등록
+    suspend fun createUser(uid: String, userName: String, gender: String): Boolean {
+        return try {
+            val userData = hashMapOf(
+                "uid" to uid,
+                "displayName" to userName,
+                "gender" to gender,
+                "totalScore" to 0,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            db.collection("Users").document(uid).set(userData).await()
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "Error creating user", e)
+            false
+        }
+    }
 }
