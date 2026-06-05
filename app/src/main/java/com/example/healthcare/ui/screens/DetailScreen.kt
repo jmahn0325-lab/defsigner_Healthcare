@@ -5,11 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -63,7 +66,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         if (selectedUnit == "잔") alternativeUnit else selectedUnit
     } else when (itemName) {
         "흡연" -> "개비"
-        "수면", "일어서기", "스크린 타임" -> "시간"
+        "수면", "활동시간", "스크린 타임" -> "시간"
         "걸음수" -> "보"
         else -> "단위"
     }
@@ -74,7 +77,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
     val targetMax = when (itemName) {
         "걸음수" -> 20000f
-        "수면", "일어서기", "스크린 타임" -> 24f
+        "수면", "활동시간", "스크린 타임" -> 24f
         "흡연" -> 26f
         "알코올" -> 24f
         "카페인" -> 30f
@@ -88,7 +91,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         "카페인" -> healthState.caffeineTarget
         "수면" -> healthState.sleepTarget
         "걸음수" -> healthState.stepsTarget
-        "일어서기" -> healthState.standTarget
+        "활동시간" -> healthState.standTarget
         "스크린 타임" -> healthState.screenTimeTarget
         else -> 10f
     }
@@ -102,7 +105,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             "카페인" -> healthState.caffeineTarget = internalVal
             "수면" -> healthState.sleepTarget = internalVal
             "걸음수" -> healthState.stepsTarget = internalVal
-            "일어서기" -> healthState.standTarget = internalVal
+            "활동시간" -> healthState.standTarget = internalVal
             "스크린 타임" -> healthState.screenTimeTarget = internalVal
         }
     }
@@ -121,6 +124,8 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
     var showInputDialog by remember { mutableStateOf(false) }
     var manualInputText by remember { mutableStateOf("") }
+    
+    var showPenaltyInfo by remember { mutableStateOf(false) }
 
     val rawChartData = healthState.getChartData(itemName, selectedPeriod.replace("기간", "단위"))
     val chartData = rawChartData.map { (date: String, value: Float) -> 
@@ -240,7 +245,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             confirmButton = {
                 TextButton(onClick = {
                     val content = newTypeContent.toFloatOrNull() ?: 1f
-                    val unit = if (newTypeUnit.isBlank()) "단위" else newTypeUnit
+                    val unit = newTypeUnit.ifBlank { "단위" }
                     val types = if (itemName == "알코올") healthState.alcoholTypes else healthState.caffeineTypes
                     val newType = BeverageType(newTypeName, content, unit)
                     
@@ -367,7 +372,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         Text(text = if (itemName == "수면") "현재 수면 건강 점수 영향" else "현재 적용 중인 총 감점", fontSize = 14.sp, color = Color.Gray)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = String.format("%.2f점", totalPenalty),
+                            text = String.format(java.util.Locale.getDefault(), "%.2f점", totalPenalty),
                             fontSize = 32.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = if (totalPenalty < 0) Color(0xFFD32F2F) else Color(0xFF2E7D32)
@@ -451,7 +456,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    val displayBase = displayCurrentValue
                     val delta = tempDisplayValue - displayCurrentValue
 
                     val contentModifier = if (showManualInput) {
@@ -472,8 +476,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = contentModifier
                     ) {
-                        val baseText = if (displayBase == displayBase.toInt().toFloat()) "${displayBase.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayBase)
-                        Text(text = baseText, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        Text(text = if (displayCurrentValue == displayCurrentValue.toInt().toFloat()) "${displayCurrentValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
                         if (hasSliderChanges) {
                             val deltaText = if (isContinuousUnit) String.format(java.util.Locale.getDefault(), " +%.1f", delta) else " +${delta.roundToInt()}"
@@ -526,11 +529,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+            val isHigherBetter = itemName in listOf("걸음수", "활동시간", "수면")
             CustomBarChart(
                 data = chartData,
                 isWeekly = selectedPeriod == "기간(주)",
                 modifier = Modifier.fillMaxWidth().height(250.dp),
-                yAxisTitle = displayUnit
+                yAxisTitle = displayUnit,
+                targetValue = displayTargetValue,
+                isHigherBetter = isHigherBetter
             )
             
             // 시점별 감점 상세 내역 추가 (흡연, 알코올, 카페인, 수면 해당)
@@ -565,7 +571,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                             fontWeight = FontWeight.Bold
                                         )
                                         val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
-                                        val formattedValue = if (itemName == "수면" || itemName == "스크린 타임") String.format("%.1f", detail.originalValue) else "${detail.originalValue.toInt()}"
+                                        val formattedValue = if (itemName == "수면" || itemName == "스크린 타임") String.format(java.util.Locale.getDefault(), "%.1f", detail.originalValue) else "${detail.originalValue.toInt()}"
                                         val penaltyLabel = if (detail.isOverThreshold) {
                                             when (itemName) {
                                                 "수면" -> " (수면 부족 💤)"
@@ -597,6 +603,61 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         color = Color.Gray,
                         modifier = Modifier.padding(top = 4.dp).fillMaxWidth()
                     )
+
+                    // 물음표 버튼 및 확장형 설명
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { showPenaltyInfo = !showPenaltyInfo }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Help,
+                                contentDescription = "기준 안내",
+                                tint = Color.Gray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "점수 산정 기준 보기",
+                                fontSize = 12.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        if (showPenaltyInfo) {
+                            val genderStr = if (healthState.gender == "Female") "여성" else "남성"
+                            val infoText = when (itemName) {
+                                "알코올" -> "($genderStr 기준) 24시간 내에 연속적으로 알코올을 ${if (healthState.gender == "Female") 20 else 40}g 이상 섭취하면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
+                                "흡연" -> "($genderStr 기준) 24시간 내에 연속적으로 담배를 ${if (healthState.gender == "Female") 7 else 13}개비 이상 피우면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
+                                "카페인" -> "($genderStr 기준) 24시간 내에 연속적으로 카페인을 ${if (healthState.gender == "Female") 300 else 400}mg 이상 섭취하면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
+                                "수면" -> "오늘, 어제, 그저께의 수면 시간을 0.5:0.3:0.2 비율로 가중 합산하여 7시간(만점 기준) 미만일 경우 점수가 계산됩니다. 꾸준한 수면 습관이 중요합니다."
+                                "스크린 타임" -> "설정한 목표 시간을 초과하여 전자기기를 사용할 경우, 초과된 시간(1시간당 -1점)만큼 건강 점수에서 감점됩니다."
+                                else -> "해당 항목의 기록 수치가 건강 점수에 실시간으로 반영됩니다."
+                            }
+                            Surface(
+                                color = Color(0xFFF0F0F0),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
+                            ) {
+                                Text(
+                                    text = infoText,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
+                                    color = Color.DarkGray,
+                                    modifier = Modifier.padding(12.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

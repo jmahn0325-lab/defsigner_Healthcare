@@ -14,8 +14,6 @@ import androidx.compose.ui.tooling.preview.Preview
 @Composable
 fun OnboardingScreen(healthState: HealthState, onComplete: () -> Unit) {
     var selectedGender by remember { mutableStateOf("Male") }
-    var isSmoker by remember { mutableStateOf(true) }
-    var isDrinker by remember { mutableStateOf(true) }
 
     Column(
         modifier = Modifier
@@ -32,7 +30,7 @@ fun OnboardingScreen(healthState: HealthState, onComplete: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "당신에게 딱 맞는 건강 관리를 위해\n몇 가지 정보를 알려주세요.",
+            text = "당신에게 딱 맞는 건강 관리를 위해\n성별을 선택해 주세요.",
             fontSize = 16.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -59,43 +57,11 @@ fun OnboardingScreen(healthState: HealthState, onComplete: () -> Unit) {
             Text(text = "여성")
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Smoking Habit
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(text = "흡연을 하시나요?", fontWeight = FontWeight.Bold)
-            Switch(
-                checked = isSmoker,
-                onCheckedChange = { isSmoker = it }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Drinking Habit
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(text = "음주를 하시나요?", fontWeight = FontWeight.Bold)
-            Switch(
-                checked = isDrinker,
-                onCheckedChange = { isDrinker = it }
-            )
-        }
-
         Spacer(modifier = Modifier.height(64.dp))
 
         Button(
             onClick = {
                 healthState.gender = selectedGender
-                healthState.isSmoker = isSmoker
-                healthState.isDrinker = isDrinker
                 healthState.isOnboardingCompleted = true
                 healthState.saveProfile()
                 onComplete()

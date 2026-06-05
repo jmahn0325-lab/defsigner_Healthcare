@@ -65,7 +65,7 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                     sleepHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "수면", value) }
 
                     val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
-                    activeTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "일어서기", value) }
+                    activeTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "활동시간", value) }
                 }
                 val screenTimeHistory = fetchHistoricalScreenTime(context, 35)
                 screenTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
@@ -118,7 +118,7 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                                     val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
                                     sleepHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "수면", value) }
                                     val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
-                                    activeTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "일어서기", value) }
+                                    activeTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "활동시간", value) }
                                     val screenTimeHistory = fetchHistoricalScreenTime(context, 35)
                                     screenTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
                                     
@@ -155,38 +155,27 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                 onClick = { onNavigateToDetail("종합 점수") }
             )
 
-            if (healthState.isDrinker || healthState.isSmoker) {
-                Text(
-                    text = "직접 기록",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
+            Text(
+                text = "직접 기록",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 8.dp)
+            )
 
-            if (healthState.isDrinker) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val alcoholCups = healthState.getTodayValue("알코올") / healthState.selectedAlcoholType.content
-                        HealthInputSlider("🍶", "알코올", healthState.selectedAlcoholType.unit, value = alcoholCups, maxValue = healthState.alcoholTarget,
-                            onClick = { onNavigateToDetail("알코올") })
-                    }
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val caffeineCups = healthState.getTodayValue("카페인") / healthState.selectedCaffeineType.content
-                        HealthInputSlider("☕", "카페인", healthState.selectedCaffeineType.unit, value = caffeineCups, maxValue = healthState.caffeineTarget,
-                            onClick = { onNavigateToDetail("카페인") })
-                    }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val alcoholCups = healthState.getTodayValue("알코올") / healthState.selectedAlcoholType.content
+                    HealthInputSlider("🍶", "알코올", healthState.selectedAlcoholType.unit, value = alcoholCups, maxValue = healthState.alcoholTarget,
+                        onClick = { onNavigateToDetail("알코올") })
                 }
-            } else {
-                // 음주를 안해도 카페인은 보여줘야 하므로 (기존 Row에서 카페인만 추출)
-                HealthInputSlider("☕", "카페인", healthState.selectedCaffeineType.unit, value = healthState.getTodayValue("카페인") / healthState.selectedCaffeineType.content, maxValue = healthState.caffeineTarget,
-                    onClick = { onNavigateToDetail("카페인") })
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val caffeineCups = healthState.getTodayValue("카페인") / healthState.selectedCaffeineType.content
+                    HealthInputSlider("☕", "카페인", healthState.selectedCaffeineType.unit, value = caffeineCups, maxValue = healthState.caffeineTarget,
+                        onClick = { onNavigateToDetail("카페인") })
+                }
             }
-
-            if (healthState.isSmoker) {
-                HealthInputSlider("🚬", "흡연", "개비", value = healthState.getTodayValue("흡연"), maxValue = healthState.smokingTarget,
-                    onClick = { onNavigateToDetail("흡연") })
-            }
+            HealthInputSlider("🚬", "흡연", "개비", value = healthState.getTodayValue("흡연"), maxValue = healthState.smokingTarget,
+                onClick = { onNavigateToDetail("흡연") })
 
             Text(
                 text = "자동 측정 데이터",
@@ -199,9 +188,9 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HealthApiRecord("👣", "걸음수", "${healthState.getTodayValue("걸음수").toInt()}보", progress = healthState.getTodayValue("걸음수") / healthState.stepsTarget.coerceAtLeast(1f), Color(0xFF4CAF50), onClick = { onNavigateToDetail("걸음수") })
                     
-                    val activeTime = healthState.getTodayValue("일어서기")
+                    val activeTime = healthState.getTodayValue("활동시간")
                     val activeDisplay = if (activeTime < 1f && activeTime > 0f) "${(activeTime * 60).toInt()}분" else String.format(Locale.getDefault(), "%.1f시간", activeTime)
-                    HealthApiRecord("🧍", "일어서기", activeDisplay, progress = activeTime / healthState.standTarget.coerceAtLeast(1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("일어서기") })
+                    HealthApiRecord("🧍", "활동시간", activeDisplay, progress = activeTime / healthState.standTarget.coerceAtLeast(1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("활동시간") })
                 }
 
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {

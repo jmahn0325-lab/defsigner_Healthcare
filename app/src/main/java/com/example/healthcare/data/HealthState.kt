@@ -31,8 +31,6 @@ data class PenaltyDetail(
 
 class HealthState private constructor(private val context: Context?) {
     var gender by mutableStateOf("Male")
-    var isSmoker by mutableStateOf(true)
-    var isDrinker by mutableStateOf(true)
     var isOnboardingCompleted by mutableStateOf(false)
 
     var alcoholTarget by mutableFloatStateOf(24f)
@@ -65,7 +63,7 @@ class HealthState private constructor(private val context: Context?) {
         if (!loadFromStorage()) {
             val today = LocalDate.now()
             val manualTypes = listOf("알코올", "흡연", "카페인")
-            val autoTypes = listOf("수면", "걸음수", "일어서기", "스크린 타임")
+            val autoTypes = listOf("수면", "걸음수", "활동시간", "스크린 타임")
             for (i in 0..35) {
                 val date = today.minusDays(i.toLong())
                 manualTypes.forEach { type ->
@@ -81,7 +79,7 @@ class HealthState private constructor(private val context: Context?) {
                     val value = when (type) {
                         "수면" -> (4..9).random().toFloat()
                         "걸음수" -> (2000..12000).random().toFloat()
-                        "일어서기" -> (5..15).random().toFloat()
+                        "활동시간" -> (5..15).random().toFloat()
                         "스크린 타임" -> (1..10).random().toFloat()
                         else -> 0f
                     }
@@ -196,14 +194,14 @@ class HealthState private constructor(private val context: Context?) {
     // 걸음수를 제외한 각 건강 지표를 통해 0~100점의 종합 점수를 계산합니다.
     fun getHealthScore(): Int {
         var score = 100f
-        val stand = getTodayValue("일어서기")
+        val stand = getTodayValue("활동시간")
 
         // 자동 측정 항목 감점 (가중치 적용)
         val standPenalty = if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
         
         // 수동 입력 항목 및 수면/스크린 타임 감점
-        val alcoholPenalty = if (isDrinker) getTotalCurrentPenalty("알코올") else 0f
-        val smokePenalty = if (isSmoker) getTotalCurrentPenalty("흡연") else 0f
+        val alcoholPenalty = getTotalCurrentPenalty("알코올")
+        val smokePenalty = getTotalCurrentPenalty("흡연")
         val caffeinePenalty = getTotalCurrentPenalty("카페인")
         val sleepPenalty = getTotalCurrentPenalty("수면")
         val screenPenalty = getTotalCurrentPenalty("스크린 타임")
@@ -217,15 +215,13 @@ class HealthState private constructor(private val context: Context?) {
 
     // 가장 감점이 큰 요소를 찾아 맞춤형 피드백을 제공합니다.
     fun getHealthFeedback(): String {
-        val stand = getTodayValue("일어서기")
+        val stand = getTodayValue("활동시간")
 
         val penalties = mutableMapOf(
-            "일어서기" to if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
+            "활동시간" to if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
         )
         
-        val checkTypes = mutableListOf("카페인", "수면", "스크린 타임")
-        if (isDrinker) checkTypes.add("알코올")
-        if (isSmoker) checkTypes.add("흡연")
+        val checkTypes = mutableListOf("카페인", "수면", "스크린 타임", "알코올", "흡연")
 
         checkTypes.forEach { 
             val penalty = getTotalCurrentPenalty(it)
@@ -240,7 +236,7 @@ class HealthState private constructor(private val context: Context?) {
 
         return when (worstFactor.key) {
             "수면" -> "수면이 부족합니다. 뇌와 신체가 쉴 수 있도록 오늘 밤은 일찍 주무세요."
-            "일어서기" -> "오래 앉아 계셨네요. 중간중간 일어나서 스트레칭을 해볼까요?"
+            "활동시간" -> "오래 앉아 계셨네요. 중간중간 일어나서 스트레칭을 해볼까요?"
             "스크린 타임" -> "전자기기 사용 시간이 깁니다. 눈과 뇌에 휴식을 주세요."
             "알코올" -> "음주량이 높습니다. 간이 회복할 수 있도록 오늘은 술을 참아보세요."
             "흡연" -> "흡연량이 많아 건강에 치명적입니다. 단기 금연부터 시도해보는 것은 어떨까요?"
@@ -258,8 +254,6 @@ class HealthState private constructor(private val context: Context?) {
     fun saveProfile() {
         prefs?.edit()?.apply {
             putString("gender", gender)
-            putBoolean("isSmoker", isSmoker)
-            putBoolean("isDrinker", isDrinker)
             putBoolean("isOnboardingCompleted", isOnboardingCompleted)
             commit()
         }
@@ -273,8 +267,6 @@ class HealthState private constructor(private val context: Context?) {
         caffeineTypes.find { it.name == caffeineName }?.let { selectedCaffeineType = it }
 
         gender = prefs?.getString("gender", "Male") ?: "Male"
-        isSmoker = prefs?.getBoolean("isSmoker", true) ?: true
-        isDrinker = prefs?.getBoolean("isDrinker", true) ?: true
         isOnboardingCompleted = prefs?.getBoolean("isOnboardingCompleted", false) ?: false
     }
 

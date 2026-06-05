@@ -91,10 +91,22 @@ fun HealthApiRecord(emoji: String, title: String, value: String, progress: Float
 }
 
 @Composable
-fun CustomBarChart(data: List<Pair<String, Float>>, isWeekly: Boolean, modifier: Modifier = Modifier, yAxisTitle: String = "") {
+fun CustomBarChart(
+    data: List<Pair<String, Float>>,
+    isWeekly: Boolean,
+    modifier: Modifier = Modifier,
+    yAxisTitle: String = "",
+    targetValue: Float? = null,
+    isHigherBetter: Boolean = true
+) {
     val rawMax = data.maxOfOrNull { it.second } ?: 10f
-    val maxDataValue = (rawMax * 1.2f).coerceAtLeast(10f)
+    val chartMax = if (targetValue != null) maxOf(rawMax, targetValue) else rawMax
+    val maxDataValue = (chartMax * 1.2f).coerceAtLeast(10f)
     val yAxisLabels = listOf(maxDataValue.toInt().toString(), (maxDataValue / 2).toInt().toString(), "0")
+
+    // 항목 특성에 따른 색상 및 문구 설정
+    val themeColor = if (isHigherBetter) Color(0xFF4CAF50) else Color(0xFFE53935)
+    val goalSuffix = if (isHigherBetter) " 이상" else " 이하"
 
     Column(modifier = modifier) {
         if (yAxisTitle.isNotEmpty()) {
@@ -106,6 +118,7 @@ fun CustomBarChart(data: List<Pair<String, Float>>, isWeekly: Boolean, modifier:
             )
         }
         Box(modifier = Modifier.weight(1f)) {
+            // 배경 가이드 라인
             Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
                 yAxisLabels.forEach { label ->
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -115,6 +128,46 @@ fun CustomBarChart(data: List<Pair<String, Float>>, isWeekly: Boolean, modifier:
                     }
                 }
             }
+
+            // 목표량 영역 강조 및 수치 표시
+            if (targetValue != null) {
+                val targetHeightFraction = (targetValue / maxDataValue).coerceIn(0f, 1f)
+                
+                // 1. 강조 배경 영역
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(targetHeightFraction)
+                        .align(Alignment.BottomEnd)
+                        .padding(start = 48.dp, bottom = 20.dp)
+                        .background(themeColor.copy(alpha = 0.12f))
+                )
+                
+                // 2. 목표선 및 수치 텍스트
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(targetHeightFraction)
+                        .align(Alignment.BottomEnd)
+                        .padding(start = 48.dp, bottom = 20.dp)
+                ) {
+                    // 목표 수평선
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(themeColor.copy(alpha = 0.4f)).align(Alignment.TopStart))
+                    
+                    // 목표치 텍스트 라벨 (왼쪽 배치)
+                    val formattedTarget = if (targetValue == targetValue.toInt().toFloat()) "${targetValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", targetValue)
+                    Text(
+                        text = "목표: $formattedTarget$yAxisTitle$goalSuffix",
+                        fontSize = 9.sp,
+                        color = themeColor,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 4.dp, top = 2.dp)
+                    )
+                }
+            }
+
             Row(modifier = Modifier.fillMaxSize().padding(start = 48.dp, top = 24.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
                 data.forEach { (_, value) ->
                     val heightFraction = (value / maxDataValue).coerceIn(0f, 1f)
