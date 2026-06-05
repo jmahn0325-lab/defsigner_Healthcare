@@ -103,23 +103,28 @@ class SocialRepository {
 
     // 초대 코드로 파티 참여하기
     suspend fun joinParty(inviteCode: String, myUid: String): Boolean {
+        Log.d("SocialRepository", "joinParty attempt: Code=$inviteCode, User=$myUid")
         return try {
             val query = db.collection("Parties")
-                .whereEqualTo("inviteCode", inviteCode.uppercase())
+                .whereEqualTo("inviteCode", inviteCode.trim().uppercase())
                 .limit(1)
                 .get()
                 .await()
 
             if (!query.isEmpty) {
-                val docId = query.documents[0].id
-                db.collection("Parties").document(docId)
+                val document = query.documents[0]
+                // 문서 ID를 직접 사용하여 업데이트 보장
+                db.collection("Parties").document(document.id)
                     .update("memberUids", FieldValue.arrayUnion(myUid))
                     .await()
+                Log.d("SocialRepository", "Join Success: ${document.id}")
                 true
             } else {
+                Log.e("SocialRepository", "Join Fail: Code not found")
                 false
             }
         } catch (e: Exception) {
+            Log.e("SocialRepository", "Join Error", e)
             false
         }
     }
