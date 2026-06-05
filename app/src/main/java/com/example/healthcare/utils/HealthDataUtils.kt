@@ -16,45 +16,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-suspend fun fetchHistoricalSteps(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
-    val map = mutableMapOf<LocalDate, Float>()
-    try {
-        val zoneId = ZoneId.systemDefault()
-        val today = LocalDate.now(zoneId)
-        val nowInstant = Instant.now()
-
-        for (i in 0..days) {
-            val date = today.minusDays(i.toLong())
-            val startOfDay = date.atStartOfDay(zoneId).toInstant()
-            val endOfDay = date.plusDays(1).atStartOfDay(zoneId).toInstant()
-
-            val actualEnd = if (endOfDay.isAfter(nowInstant)) nowInstant else endOfDay
-
-            if (startOfDay.isAfter(actualEnd)) {
-                map[date] = 0f
-                continue
-            }
-
-            val request = ReadRecordsRequest(
-                recordType = StepsRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startOfDay, actualEnd)
-            )
-
-            val response = client.readRecords(request)
-
-            val stepsByPackage = mutableMapOf<String, Long>()
-            response.records.forEach { record ->
-                val packageName = record.metadata.dataOrigin.packageName
-                stepsByPackage[packageName] = (stepsByPackage[packageName] ?: 0L) + record.count
-            }
-
-            val maxSteps = stepsByPackage.values.maxOrNull() ?: 0L
-            map[date] = maxSteps.toFloat()
-        }
-    } catch (e: Exception) { e.printStackTrace() }
-    return map
-}
-
 suspend fun fetchHistoricalActiveTime(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
     val map = mutableMapOf<LocalDate, Float>()
     try {
@@ -172,12 +133,14 @@ fun fetchHistoricalScreenTime(context: Context, days: Int): Map<LocalDate, Float
         val zoneId = ZoneId.systemDefault()
         val today = LocalDate.now(zoneId)
 
+        // 런처 및 시스템 앱 필터링 준비
         val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
         val launchers = packageManager.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }.toSet()
 
         val systemPackages = setOf(
             "com.android.systemui", "com.android.settings", "android",
-            "com.samsung.android.app.aodservice", "com.samsung.android.app.cocktailbarservice"
+            "com.samsung.android.app.aodservice", "com.samsung.android.app.cocktailbarservice",
+            "com.google.android.permissioncontroller"
         )
 
         for (i in 0..days) {
@@ -185,15 +148,61 @@ fun fetchHistoricalScreenTime(context: Context, days: Int): Map<LocalDate, Float
             val startMilli = date.atStartOfDay(zoneId).toInstant().toEpochMilli()
             val endMilli = if (i == 0) System.currentTimeMillis() else date.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
 
-            val stats = usageStatsManager.queryAndAggregateUsageStats(startMilli, endMilli)
+            // queryAndAggregateUsageStats는 중복 합산 위험이 큼. 
+            // 삼성 디지털 웰빙처럼 정확한 스크린 '켜짐' 시간을 구하기 위해 이벤트 기반으로 변경
+            val events = usageStatsManager.queryEvents(startMilli, endMilli)
+            val event = android.app.usage.UsageEvents.Event()
+            
+            val appUsageMap = mutableMapOf<String, Long>() // 앱별 시작 시간 저장
+            
+            // 모든 앱의 사용 구간을 저장 (시작, 종료)
+            val usageIntervals = mutableListOf<Pair<Long, Long>>()
 
-            var totalTime = 0L
-            for ((packageName, stat) in stats) {
-                if (stat.totalTimeInForeground > 0 && !launchers.contains(packageName) && !systemPackages.contains(packageName)) {
-                    totalTime += stat.totalTimeInForeground
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val pkg = event.packageName
+                
+                // 필터링: 런처나 시스템 UI는 제외
+                if (launchers.contains(pkg) || systemPackages.contains(pkg)) continue
+
+                when (event.eventType) {
+                    android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED -> {
+                        appUsageMap[pkg] = event.timeStamp
+                    }
+                    android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED -> {
+                        val startTime = appUsageMap.remove(pkg)
+                        if (startTime != null && event.timeStamp > startTime) {
+                            usageIntervals.add(startTime to event.timeStamp)
+                        }
+                    }
                 }
             }
-            map[date] = totalTime.toFloat() / (1000f * 60f * 60f)
+
+            // 겹치는 시간 구간 병합 (활동시간 로직과 동일하게 적용)
+            // 여러 앱이 백그라운드에서 돌거나 동시에 활성화된 것으로 잡히는 경우 방지
+            val mergedTotalMillis = if (usageIntervals.isNotEmpty()) {
+                val sorted = usageIntervals.sortedBy { it.first }
+                var currentStart = sorted[0].first
+                var currentEnd = sorted[0].second
+                var total = 0L
+
+                for (idx in 1 until sorted.size) {
+                    val nextStart = sorted[idx].first
+                    val nextEnd = sorted[idx].second
+
+                    if (nextStart <= currentEnd) {
+                        currentEnd = maxOf(currentEnd, nextEnd)
+                    } else {
+                        total += (currentEnd - currentStart)
+                        currentStart = nextStart
+                        currentEnd = nextEnd
+                    }
+                }
+                total += (currentEnd - currentStart)
+                total
+            } else 0L
+
+            map[date] = mergedTotalMillis.toFloat() / (1000f * 60f * 60f)
         }
     } catch (e: Exception) { e.printStackTrace() }
     return map

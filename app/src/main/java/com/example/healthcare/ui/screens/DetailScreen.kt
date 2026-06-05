@@ -67,7 +67,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     } else when (itemName) {
         "흡연" -> "개비"
         "수면", "활동시간", "스크린 타임" -> "시간"
-        "걸음수" -> "보"
         else -> "단위"
     }
 
@@ -76,7 +75,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     } else 1f
 
     val targetMax = when (itemName) {
-        "걸음수" -> 20000f
         "수면", "스크린 타임" -> 24f
         "활동시간" -> 5f // 활동시간 최대 목표치를 5시간으로 조정 (현실적 범위)
         "흡연" -> 26f
@@ -91,12 +89,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         "흡연" -> healthState.smokingTarget
         "카페인" -> healthState.caffeineTarget
         "수면" -> healthState.sleepTarget
-        "걸음수" -> healthState.stepsTarget
         "활동시간" -> healthState.activityTarget
         "스크린 타임" -> healthState.screenTimeTarget
-        else -> 10f
+        else -> 0f
     }
-    val displayTargetValue = targetValue * multiplier
+    // 슬라이더 논리 계산을 위해 multiplier가 적용된 타겟값
+    val effectiveTargetValue = targetValue * multiplier
+    // 차트 표시 여부를 결정하는 타겟값 (알코올, 흡연, 카페인은 null로 처리하여 라인 숨김)
+    val displayTargetValue: Float? = if (itemName in listOf("알코올", "흡연", "카페인")) null else effectiveTargetValue
 
     val onTargetChange: (Float) -> Unit = { newVal ->
         val internalVal = newVal / multiplier
@@ -105,11 +105,12 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             "흡연" -> healthState.smokingTarget = internalVal
             "카페인" -> healthState.caffeineTarget = internalVal
             "수면" -> healthState.sleepTarget = internalVal
-            "걸음수" -> healthState.stepsTarget = internalVal
             "활동시간" -> healthState.activityTarget = internalVal
             "스크린 타임" -> healthState.screenTimeTarget = internalVal
         }
     }
+
+    var targetInputText by remember(targetValue) { mutableStateOf(if (targetValue > 0) String.format(java.util.Locale.getDefault(), "%.1f", targetValue) else "") }
 
     val rawAbsoluteValue = healthState.getTodayValue(itemName)
     val displayCurrentValue = if (isConvertible && selectedUnit == "잔") {
@@ -118,7 +119,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         rawAbsoluteValue
     }
     val isManualInput = itemName in listOf("알코올", "흡연", "카페인")
-    val hasPenaltyDetails = itemName in listOf("알코올", "흡연", "카페인", "수면", "스크린 타임")
+    val hasPenaltyDetails = itemName in listOf("알코올", "흡연", "카페인", "수면", "스크린 타임", "활동시간")
 
     var tempDisplayValue by remember(displayCurrentValue, selectedUnit) { mutableFloatStateOf(displayCurrentValue) }
     val hasSliderChanges = tempDisplayValue > displayCurrentValue + 0.001f
@@ -416,7 +417,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         }
                     }
                 }
-                val dynamicSliderMax = max(displayTargetValue, tempDisplayValue).coerceAtLeast(1f * multiplier)
+                val dynamicSliderMax = max(effectiveTargetValue, tempDisplayValue).coerceAtLeast(1f * multiplier)
                 val sliderWeight = (dynamicSliderMax - displayCurrentValue).coerceAtLeast(0.01f)
                 val baseWeight = displayCurrentValue.coerceAtLeast(0.01f)
 
@@ -494,8 +495,18 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 Text(text = "현재 기록된 수치 (자동 연동)", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
                 Spacer(modifier = Modifier.height(8.dp))
                 Box(modifier = Modifier.fillMaxWidth().background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp)).padding(16.dp), contentAlignment = Alignment.Center) {
-                    val formattedVal = if (itemName == "걸음수") "${displayCurrentValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue)
-                    Text(text = "$formattedVal $displayUnit", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    val formattedVal = if (itemName == "활동시간") {
+                        val hours = displayCurrentValue.toInt()
+                        val minutes = ((displayCurrentValue - hours) * 60).roundToInt()
+                        when {
+                            hours > 0 && minutes > 0 -> "${hours}시간 ${minutes}분"
+                            hours > 0 -> "${hours}시간"
+                            else -> "${minutes}분"
+                        }
+                    } else {
+                        String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue)
+                    }
+                    Text(text = "$formattedVal ${if (itemName == "활동시간") "" else displayUnit}", fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -530,7 +541,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            val isHigherBetter = itemName in listOf("걸음수", "활동시간", "수면")
+            val isHigherBetter = itemName in listOf("활동시간", "수면")
             CustomBarChart(
                 data = chartData,
                 isWeekly = selectedPeriod == "기간(주)",
@@ -552,111 +563,129 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 
                 val penaltyDetails = healthState.getPenaltyDetails(itemName)
                 
-                if (penaltyDetails.isEmpty()) {
-                    Text(text = "기록된 데이터가 없습니다.", color = Color.Gray, modifier = Modifier.padding(vertical = 16.dp))
-                } else {
-                    Box(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).background(Color(0xFFF9F9F9), RoundedCornerShape(8.dp)).border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))) {
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
-                            penaltyDetails.forEach { detail ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        // 1. 시점 정확히 반영 (MM/dd H시 형식, 수면은 날짜만)
-                                        val timePattern = if (itemName == "수면") "MM/dd" else "MM/dd H시"
+                // key(healthState.activityTarget)를 사용하여 Recomposition 유도
+                key(if (itemName == "활동시간") healthState.activityTarget else 0f) {
+                    if (penaltyDetails.isEmpty()) {
+                        Text(text = "기록된 데이터가 없습니다.", color = Color.Gray, modifier = Modifier.padding(vertical = 16.dp))
+                    } else {
+                        Box(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).background(Color(0xFFF9F9F9), RoundedCornerShape(8.dp)).border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))) {
+                            Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
+                                penaltyDetails.forEach { detail ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            // 1. 시점 정확히 반영 (MM/dd H시 형식, 수면은 날짜만)
+                                            val timePattern = if (itemName == "수면") "MM/dd" else "MM/dd H시"
+                                            Text(
+                                                text = detail.dateTime.format(DateTimeFormatter.ofPattern(timePattern)),
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
+                                            val formattedValue = if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동시간") {
+                                                if (itemName == "활동시간") {
+                                                    val totalMinutes = (detail.originalValue * 60).roundToInt()
+                                                    val h = totalMinutes / 60
+                                                    val m = totalMinutes % 60
+                                                    when {
+                                                        h > 0 && m > 0 -> "${h}시간 ${m}분"
+                                                        h > 0 -> "${h}시간"
+                                                        else -> "${m}분"
+                                                    }
+                                                } else {
+                                                    String.format(java.util.Locale.getDefault(), "%.1f", detail.originalValue)
+                                                }
+                                            } else "${detail.originalValue.toInt()}"
+                                            val penaltyLabel = if (detail.isOverThreshold) {
+                                                when (itemName) {
+                                                    "수면" -> " (수면 부족 💤)"
+                                                    "활동시간" -> " (활동 부족 🏃)"
+                                                    "스크린 타임" -> ""
+                                                    else -> " (폭주 페널티 🔥)"
+                                                }
+                                            } else ""
+                                            
+                                            Text(
+                                                text = "기록: $formattedValue$unitInDetail$penaltyLabel",
+                                                fontSize = 12.sp,
+                                                color = if (detail.isOverThreshold && itemName != "수면") Color(0xFFD32F2F) else Color.Gray
+                                            )
+                                        }
                                         Text(
-                                            text = detail.dateTime.format(DateTimeFormatter.ofPattern(timePattern)),
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
-                                        val formattedValue = if (itemName == "수면" || itemName == "스크린 타임") String.format(java.util.Locale.getDefault(), "%.1f", detail.originalValue) else "${detail.originalValue.toInt()}"
-                                        val penaltyLabel = if (detail.isOverThreshold) {
-                                            when (itemName) {
-                                                "수면" -> " (수면 부족 💤)"
-                                                "스크린 타임" -> ""
-                                                else -> " (폭주 페널티 🔥)"
-                                            }
-                                        } else ""
-                                        
-                                        Text(
-                                            text = "기록: $formattedValue$unitInDetail$penaltyLabel",
-                                            fontSize = 12.sp,
-                                            color = if (detail.isOverThreshold && itemName != "수면") Color(0xFFD32F2F) else Color.Gray
+                                            text = String.format("%.2f점", detail.currentPenalty),
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (detail.currentPenalty < 0) Color(0xFFE53935) else if (detail.currentPenalty > 0) Color(0xFF2E7D32) else Color.Black
                                         )
                                     }
-                                    Text(
-                                        text = String.format("%.2f점", detail.currentPenalty),
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (detail.currentPenalty < 0) Color(0xFFE53935) else if (detail.currentPenalty > 0) Color(0xFF2E7D32) else Color.Black
-                                    )
+                                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
                                 }
-                                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
                             }
                         }
+                        Text(
+                            text = if (itemName == "수면") "* 최근 3일간의 수면 습관이 오늘 점수에 반영됩니다." else "* 시간이 지남에 따라 감점 수치는 서서히 감소합니다.",
+                            fontSize = 11.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(top = 4.dp).fillMaxWidth()
+                        )
                     }
-                    Text(
-                        text = if (itemName == "수면") "* 최근 3일간의 수면 습관이 오늘 점수에 반영됩니다." else "* 시간이 지남에 따라 감점 수치는 서서히 감소합니다.",
-                        fontSize = 11.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(top = 4.dp).fillMaxWidth()
-                    )
+                }
 
-                    // 물음표 버튼 및 확장형 설명
-                    Column(
+                // 물음표 버튼 및 확장형 설명
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
+                            .clickable { showPenaltyInfo = !showPenaltyInfo }
+                            .padding(vertical = 4.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clickable { showPenaltyInfo = !showPenaltyInfo }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Help,
-                                contentDescription = "기준 안내",
-                                tint = Color.Gray,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "점수 산정 기준 보기",
-                                fontSize = 12.sp,
-                                color = Color.Gray,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Help,
+                            contentDescription = "기준 안내",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "점수 산정 기준 보기",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
 
-                        if (showPenaltyInfo) {
-                            val genderStr = if (healthState.gender == "Female") "여성" else "남성"
-                            val infoText = when (itemName) {
-                                "알코올" -> "($genderStr 기준) 24시간 내에 연속적으로 알코올을 ${if (healthState.gender == "Female") 20 else 40}g 이상 섭취하면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
-                                "흡연" -> "($genderStr 기준) 24시간 내에 연속적으로 담배를 ${if (healthState.gender == "Female") 7 else 13}개비 이상 피우면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
-                                "카페인" -> "($genderStr 기준) 24시간 내에 연속적으로 카페인을 ${if (healthState.gender == "Female") 300 else 400}mg 이상 섭취하면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
-                                "수면" -> "오늘, 어제, 그저께의 수면 시간을 0.5:0.3:0.2 비율로 가중 합산하여 7시간(만점 기준) 미만일 경우 점수가 계산됩니다. 꾸준한 수면 습관이 중요합니다."
-                                "스크린 타임" -> "설정한 목표 시간을 초과하여 전자기기를 사용할 경우, 초과된 시간(1시간당 -1점)만큼 건강 점수에서 감점됩니다."
-                                else -> "해당 항목의 기록 수치가 건강 점수에 실시간으로 반영됩니다."
-                            }
-                            Surface(
-                                color = Color(0xFFF0F0F0),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 4.dp)
-                            ) {
-                                Text(
-                                    text = infoText,
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp,
-                                    color = Color.DarkGray,
-                                    modifier = Modifier.padding(12.dp)
-                                )
-                            }
+                    if (showPenaltyInfo) {
+                        val genderStr = if (healthState.gender == "Female") "여성" else "남성"
+                        val infoText = when (itemName) {
+                            "알코올" -> "($genderStr 기준) 24시간 내에 연속적으로 알코올을 ${if (healthState.gender == "Female") 20 else 40}g 이상 섭취하면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
+                            "흡연" -> "($genderStr 기준) 24시간 내에 연속적으로 담배를 ${if (healthState.gender == "Female") 7 else 13}개비 이상 피우면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
+                            "카페인" -> "($genderStr 기준) 24시간 내에 연속적으로 카페인을 ${if (healthState.gender == "Female") 300 else 400}mg 이상 섭취하면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
+                            "수면" -> "오늘, 어제, 그저께의 수면 시간을 0.5:0.3:0.2 비율로 가중 합산하여 7시간(만점 기준) 미만일 경우 점수가 계산됩니다. 꾸준한 수면 습관이 중요합니다."
+                            "스크린 타임" -> "설정한 목표 시간을 초과하여 전자기기를 사용할 경우, 초과된 시간(1시간당 -1점)만큼 건강 점수에서 감점됩니다."
+                            "활동시간" -> "활동시간이 목표 시간(ActiveGoals)에 미달할 경우, 부족한 시간당 -3점(분당 -0.05점)의 감점이 적용됩니다. 공식: [-3.0 × (ActiveGoals(분) - 활동시간(분)) / 60]"
+                            else -> "해당 항목의 기록 수치가 건강 점수에 실시간으로 반영됩니다."
+                        }
+                        Surface(
+                            color = Color(0xFFF0F0F0),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp)
+                        ) {
+                            Text(
+                                text = infoText,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                color = Color.DarkGray,
+                                modifier = Modifier.padding(12.dp)
+                            )
                         }
                     }
                 }
@@ -666,10 +695,53 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
             if (!isManualInput) {
                 Text(text = "목표 $itemName 설정 (메인 화면 최대치 연동)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 직접 입력 필드
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    OutlinedTextField(
+                        value = targetInputText,
+                        onValueChange = { 
+                            targetInputText = it
+                            val parsed = it.toFloatOrNull()
+                            if (parsed != null) {
+                                onTargetChange(parsed)
+                            }
+                        },
+                        modifier = Modifier.width(120.dp),
+                        label = { Text("목표값") },
+                        suffix = { Text(displayUnit) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
-                Slider(value = displayTargetValue, onValueChange = onTargetChange, valueRange = 0f..displayTargetMax, colors = SliderDefaults.colors(thumbColor = Color(0xFFD2B48C), activeTrackColor = Color(0xFFD2B48C)), modifier = Modifier.fillMaxWidth())
-                val formattedTarget = if (itemName == "걸음수") "${displayTargetValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", displayTargetValue)
-                Text(text = "$formattedTarget $displayUnit", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                
+                Slider(
+                    value = targetValue.coerceIn(0f, targetMax), 
+                    onValueChange = onTargetChange, 
+                    valueRange = 0f..targetMax, 
+                    colors = SliderDefaults.colors(thumbColor = Color(0xFFD2B48C), activeTrackColor = Color(0xFFD2B48C)), 
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                val formattedTarget = if (itemName == "활동시간") {
+                    val hours = targetValue.toInt()
+                    val minutes = ((targetValue - hours) * 60).roundToInt()
+                    when {
+                        hours > 0 && minutes > 0 -> "${hours}시간 ${minutes}분"
+                        hours > 0 -> "${hours}시간"
+                        else -> "${minutes}분"
+                    }
+                } else {
+                    String.format(java.util.Locale.getDefault(), "%.1f", targetValue)
+                }
+                Text(text = "$formattedTarget ${if (itemName == "활동시간") "" else displayUnit}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(32.dp))

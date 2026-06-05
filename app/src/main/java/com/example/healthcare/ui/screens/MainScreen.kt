@@ -31,6 +31,7 @@ import com.example.healthcare.widget.HealthWidget
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,9 +49,9 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
     }
 
     val healthPermissions = setOf(
-        HealthPermission.getReadPermission(StepsRecord::class),
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        HealthPermission.getReadPermission(StepsRecord::class), // 활동시간 계산을 위해 필요함
     )
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -60,9 +61,6 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
             coroutineScope.launch {
                 isApiSyncing = true
                 if (healthConnectClient != null) {
-                    val stepsHistory = fetchHistoricalSteps(healthConnectClient, 35)
-                    stepsHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "걸음수", value) }
-
                     val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
                     sleepHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "수면", value) }
 
@@ -115,8 +113,6 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                                 val granted = healthConnectClient.permissionController.getGrantedPermissions()
                                 if (granted.containsAll(healthPermissions)) {
                                     isApiSyncing = true
-                                    val stepsHistory = fetchHistoricalSteps(healthConnectClient, 35)
-                                    stepsHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "걸음수", value) }
                                     val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
                                     sleepHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "수면", value) }
                                     val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
@@ -188,18 +184,24 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HealthApiRecord("👣", "걸음수", "${healthState.getTodayValue("걸음수").toInt()}보", progress = healthState.getTodayValue("걸음수") / healthState.stepsTarget.coerceAtLeast(1f), Color(0xFF4CAF50), onClick = { onNavigateToDetail("걸음수") })
-                    
                     val activeTime = healthState.getTodayValue("활동시간")
-                    val activeDisplay = if (activeTime < 1f && activeTime > 0f) "${(activeTime * 60).toInt()}분" else String.format(Locale.getDefault(), "%.1f시간", activeTime)
-                    HealthApiRecord("🧍", "활동시간", activeDisplay, progress = activeTime / healthState.activityTarget.coerceAtLeast(1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("활동시간") })
+                    val hours = activeTime.toInt()
+                    val minutes = ((activeTime - hours) * 60).roundToInt()
+                    val activeDisplay = when {
+                        hours > 0 && minutes > 0 -> "${hours}시간 ${minutes}분"
+                        hours > 0 -> "${hours}시간"
+                        else -> "${minutes}분"
+                    }
+                    HealthApiRecord("🧍", "활동시간", activeDisplay, progress = activeTime / healthState.activityTarget.coerceAtLeast(0.1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("활동시간") })
                 }
 
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HealthApiRecord("🌙", "수면", String.format(Locale.getDefault(), "%.1f시간", healthState.getTodayValue("수면")), progress = healthState.getTodayValue("수면") / healthState.sleepTarget.coerceAtLeast(1f), Color(0xFF673AB7), onClick = { onNavigateToDetail("수면") })
-                    HealthApiRecord("📱", "스크린 타임", String.format(Locale.getDefault(), "%.1f시간", healthState.getTodayValue("스크린 타임")), progress = healthState.getTodayValue("스크린 타임") / healthState.screenTimeTarget.coerceAtLeast(1f), Color(0xFF2196F3), onClick = { onNavigateToDetail("스크린 타임") })
                 }
             }
+
+            HealthApiRecord("📱", "스크린 타임", String.format(Locale.getDefault(), "%.1f시간", healthState.getTodayValue("스크린 타임")), progress = healthState.getTodayValue("스크린 타임") / healthState.screenTimeTarget.coerceAtLeast(1f), Color(0xFF2196F3), onClick = { onNavigateToDetail("스크린 타임") })
+
             
             Spacer(modifier = Modifier.height(32.dp))
         }

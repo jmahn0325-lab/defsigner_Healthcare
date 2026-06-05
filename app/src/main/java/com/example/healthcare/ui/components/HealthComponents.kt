@@ -130,7 +130,7 @@ fun CustomBarChart(
             }
 
             // 목표량 영역 강조 및 수치 표시
-            if (targetValue != null) {
+            if (targetValue != null && targetValue > 0) {
                 val targetHeightFraction = (targetValue / maxDataValue).coerceIn(0f, 1f)
                 
                 // 1. 강조 배경 영역

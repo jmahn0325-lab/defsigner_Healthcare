@@ -37,8 +37,13 @@ class HealthState private constructor(private val context: Context?) {
     var smokingTarget by mutableFloatStateOf(26f)
     var caffeineTarget by mutableFloatStateOf(30f)
     var sleepTarget by mutableFloatStateOf(8f)
-    var stepsTarget by mutableFloatStateOf(10000f)
-    var activityTarget by mutableFloatStateOf(2.0f) // 활동시간 목표: 2.0시간 (120분)으로 조정
+    private var _activityTarget by mutableFloatStateOf(2.0f)
+    var activityTarget: Float
+        get() = _activityTarget
+        set(value) {
+            _activityTarget = value
+            saveProfile()
+        }
     var screenTimeTarget by mutableFloatStateOf(6f)
 
     // 알코올 및 카페인 종류 리스트 (초기 단위 설정)
@@ -179,34 +184,26 @@ class HealthState private constructor(private val context: Context?) {
     // 걸음수를 제외한 각 건강 지표를 통해 0~100점의 종합 점수를 계산합니다.
     fun getHealthScore(): Int {
         var score = 100f
-        val activity = getTodayValue("활동시간")
-
-        // 자동 측정 항목 감점 (가중치 적용)
-        val activityPenalty = if (activity in 0.1f..activityTarget) (activityTarget - activity) * 2f else 0f
         
-        // 수동 입력 항목 및 수면/스크린 타임 감점
+        // 자동 측정 항목 및 수동 입력 항목 감점
+        val activityPenalty = getTotalCurrentPenalty("활동시간")
         val alcoholPenalty = getTotalCurrentPenalty("알코올")
         val smokePenalty = getTotalCurrentPenalty("흡연")
         val caffeinePenalty = getTotalCurrentPenalty("카페인")
         val sleepPenalty = getTotalCurrentPenalty("수면")
         val screenPenalty = getTotalCurrentPenalty("스크린 타임")
 
-        // score += penalty 인 이유는 각 Penalty 메서드가 음수(감점) 또는 양수(보너스)를 반환하기 때문입니다.
-        score -= activityPenalty
-        score += (alcoholPenalty + smokePenalty + caffeinePenalty + sleepPenalty + screenPenalty)
+        // score += penalty 인 이유는 각 Penalty 메서드가 음수(감점)를 반환하기 때문입니다.
+        score += (activityPenalty + alcoholPenalty + smokePenalty + caffeinePenalty + sleepPenalty + screenPenalty)
         
         return Math.round(score).toInt().coerceIn(0, 100)
     }
 
     // 가장 감점이 큰 요소를 찾아 맞춤형 피드백을 제공합니다.
     fun getHealthFeedback(): String {
-        val activity = getTodayValue("활동시간")
-
-        val penalties = mutableMapOf(
-            "활동시간" to if (activity in 0.1f..activityTarget) (activityTarget - activity) * 2f else 0f
-        )
+        val penalties = mutableMapOf<String, Float>()
         
-        val checkTypes = mutableListOf("카페인", "수면", "스크린 타임", "알코올", "흡연")
+        val checkTypes = mutableListOf("활동시간", "카페인", "수면", "스크린 타임", "알코올", "흡연")
 
         checkTypes.forEach { 
             val penalty = getTotalCurrentPenalty(it)
@@ -240,6 +237,12 @@ class HealthState private constructor(private val context: Context?) {
         prefs?.edit()?.apply {
             putString("gender", gender)
             putBoolean("isOnboardingCompleted", isOnboardingCompleted)
+            putFloat("activityTarget", activityTarget)
+            putFloat("alcoholTarget", alcoholTarget)
+            putFloat("smokingTarget", smokingTarget)
+            putFloat("caffeineTarget", caffeineTarget)
+            putFloat("sleepTarget", sleepTarget)
+            putFloat("screenTimeTarget", screenTimeTarget)
             commit()
         }
     }
@@ -253,9 +256,24 @@ class HealthState private constructor(private val context: Context?) {
 
         gender = prefs?.getString("gender", "Male") ?: "Male"
         isOnboardingCompleted = prefs?.getBoolean("isOnboardingCompleted", false) ?: false
+        
+        _activityTarget = prefs?.getFloat("activityTarget", 2.0f) ?: 2.0f
+        alcoholTarget = prefs?.getFloat("alcoholTarget", 24f) ?: 24f
+        smokingTarget = prefs?.getFloat("smokingTarget", 26f) ?: 26f
+        caffeineTarget = prefs?.getFloat("caffeineTarget", 30f) ?: 30f
+        sleepTarget = prefs?.getFloat("sleepTarget", 8f) ?: 8f
+        screenTimeTarget = prefs?.getFloat("screenTimeTarget", 6f) ?: 6f
     }
 
     fun getTotalCurrentPenalty(type: String): Float {
+        if (type == "활동시간") {
+            val h = getTodayValue("활동시간") * 60f // 현재 활동 시간 (분)
+            val target = activityTarget * 60f // 목표 활동 시간 (분)
+            // 공식: -3.0 * (ActiveGoals(분) - H(분)) / 60
+            // 즉, 부족한 시간당 -3점 감점 (분당 -0.05점)
+            // 예: 목표 180분(3시간), 현재 60분(1시간) -> -3.0 * (120 / 60) = -6.0점
+            return -3.0f * Math.max(0f, target - h) / 60f
+        }
         if (type == "수면") {
             val now = LocalDate.now()
             val s1 = calculateSleepScore(getValueForDate("수면", now))
@@ -276,6 +294,18 @@ class HealthState private constructor(private val context: Context?) {
     }
 
     fun getPenaltyDetails(type: String): List<PenaltyDetail> {
+        if (type == "활동시간") {
+            val h = getTodayValue("활동시간")
+            val penalty = getTotalCurrentPenalty("활동시간")
+            return listOf(
+                PenaltyDetail(
+                    dateTime = LocalDate.now().atTime(0, 0),
+                    originalValue = h,
+                    isOverThreshold = h < activityTarget,
+                    currentPenalty = penalty
+                )
+            )
+        }
         if (type == "수면") {
             val now = LocalDate.now()
             // 최근 3일의 수면에 대해서만 가중치가 적용된 실제 반영 점수를 로그로 보여줍니다.
