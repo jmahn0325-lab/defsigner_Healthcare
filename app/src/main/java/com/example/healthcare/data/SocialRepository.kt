@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.util.*
+import java.util.Locale
 
 class SocialRepository {
     private val db = FirebaseFirestore.getInstance()
@@ -203,6 +204,8 @@ class SocialRepository {
             
             // 3. 프라이버시 설정에 따른 필터링 분기 처리
             val filteredScores = mutableMapOf<String, Float>()
+            val detailedLogs = mutableMapOf<String, List<String>>()
+
             rawScores.forEach { (factor, score) ->
                 val isVisible = when (factor) {
                     "알코올" -> privacy.alcoholVisible
@@ -215,7 +218,47 @@ class SocialRepository {
                 }
             }
 
-            MemberDetails(memberUid, displayName, filteredScores)
+            // 추가: DailyLogs 문서에서 records 리스트 (있을 경우) 파싱
+            val rawRecords = logDoc.get("records") as? List<Map<String, Any>>
+            rawRecords?.forEach { recordMap ->
+                val type = recordMap["type"] as? String ?: return@forEach
+                val isVisible = when (type) {
+                    "알코올" -> privacy.alcoholVisible
+                    "카페인" -> privacy.caffeineVisible
+                    "흡연" -> privacy.smokingVisible
+                    else -> privacy.healthVisible
+                }
+                
+                if (isVisible) {
+                    val itemName = recordMap["itemName"] as? String
+                    val unit = recordMap["unit"] as? String
+                    val value = (recordMap["value"] as? Number)?.toFloat() ?: 0f
+                    
+                    if (itemName != null && unit != null) {
+                        val contentUnit = if (type == "알코올") "g" else if (type == "카페인") "mg" else "개비"
+                        
+                        // 간단한 추론 로직 (소주 6.3g, 맥주 7.1g, 아메리카노 150mg 등 기본값 활용)
+                        val ratio = when(itemName) {
+                            "소주" -> 6.3f
+                            "맥주" -> 7.1f
+                            "와인" -> 15.4f
+                            "아메리카노" -> 150f
+                            "에너지 드링크" -> 100f
+                            "녹차" -> 30f
+                            else -> 1f
+                        }
+                        val count = value / ratio
+                        val countStr = if (count % 1f == 0f) "${count.toInt()}" else String.format(Locale.getDefault(), "%.1f", count)
+                        val logString = "$itemName ${countStr}$unit / ${value.toInt()}$contentUnit"
+                        
+                        val list = detailedLogs.getOrDefault(type, mutableListOf()).toMutableList()
+                        list.add(logString)
+                        detailedLogs[type] = list
+                    }
+                }
+            }
+
+            MemberDetails(memberUid, displayName, filteredScores, detailedLogs)
         } catch (e: Exception) {
             Log.e("SocialRepository", "Error fetching member details", e)
             null

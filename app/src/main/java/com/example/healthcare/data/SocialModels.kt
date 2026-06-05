@@ -31,7 +31,8 @@ data class UserScore(
 data class MemberDetails(
     val uid: String,
     val displayName: String,
-    val scores: Map<String, Float> // "알코올": 85.0f 등
+    val scores: Map<String, Float>, // "알코올": 85.0f 등
+    val detailedLogs: Map<String, List<String>> = emptyMap() // 추가: "알코올": ["소주 1잔 / 60g", ...]
 )
 
 /**

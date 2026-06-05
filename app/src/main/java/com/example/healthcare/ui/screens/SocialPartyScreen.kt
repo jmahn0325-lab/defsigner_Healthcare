@@ -352,29 +352,55 @@ fun MemberDetailDialog(
                         Text("비공개 항목이거나 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                     }
                     details!!.scores.forEach { (factor, score) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        val logs = details!!.detailedLogs[factor] ?: emptyList()
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Column {
-                                Text(factor, fontWeight = FontWeight.Medium)
-                                Text("${score.toInt()}점", fontSize = 12.sp, color = Color.Gray)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(factor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Text("오늘 점수: ${score.toInt()}점", fontSize = 12.sp, color = Color.Gray)
+                                }
+                                if (member.uid != myUid) {
+                                    IconButton(onClick = {
+                                        scope.launch {
+                                            val success = repository.sendNudge(myUid, member.uid, factor)
+                                            if (success) {
+                                                Toast.makeText(context, "${factor} 항목을 콕 찔렀습니다!", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }) {
+                                        Icon(
+                                            Icons.Default.NotificationsActive,
+                                            contentDescription = "콕 찌르기",
+                                            tint = if (score < 60) Color.Red else Color.Gray
+                                        )
+                                    }
+                                }
                             }
-                            if (member.uid != myUid) {
-                                IconButton(onClick = {
-                                    scope.launch {
-                                        val success = repository.sendNudge(myUid, member.uid, factor)
-                                        if (success) {
-                                            Toast.makeText(context, "${factor} 항목을 콕 찔렀습니다!", Toast.LENGTH_SHORT).show()
+                            
+                            // 상세 로그 표시
+                            if (logs.isNotEmpty()) {
+                                Surface(
+                                    color = Color(0xFFF5F5F5),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(8.dp)) {
+                                        logs.forEach { log ->
+                                            Text(
+                                                text = "• $log",
+                                                fontSize = 12.sp,
+                                                color = Color.DarkGray,
+                                                modifier = Modifier.padding(vertical = 2.dp)
+                                            )
                                         }
                                     }
-                                }) {
-                                    Icon(
-                                        Icons.Default.NotificationsActive,
-                                        contentDescription = "콕 찌르기",
-                                        tint = if (score < 60) Color.Red else Color.Gray
-                                    )
                                 }
                             }
                         }

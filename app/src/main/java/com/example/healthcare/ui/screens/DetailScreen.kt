@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -328,7 +329,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
                         val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
                         if (isManualInput) {
-                            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, finalDisplayValue * displayToInternalMultiplier)
+                            healthState.updateManualRecord(
+                                LocalDate.now(), 
+                                LocalTime.now().hour, 
+                                itemName, 
+                                finalDisplayValue * displayToInternalMultiplier,
+                                if (isConvertible) selectedType.name else if (itemName == "흡연") "담배" else null,
+                                if (isConvertible) selectedType.unit else if (itemName == "흡연") "개비" else null
+                            )
                         } else {
                             healthState.updateAutoRecord(LocalDate.now(), itemName, finalDisplayValue * displayToInternalMultiplier)
                         }
@@ -448,7 +456,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     Button(
                         onClick = { 
                             val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
-                            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, tempDisplayValue * displayToInternalMultiplier) 
+                            healthState.updateManualRecord(
+                                LocalDate.now(), 
+                                LocalTime.now().hour, 
+                                itemName, 
+                                tempDisplayValue * displayToInternalMultiplier,
+                                if (isConvertible) selectedType.name else if (itemName == "흡연") "담배" else null,
+                                if (isConvertible) selectedType.unit else if (itemName == "흡연") "개비" else null
+                            ) 
                             updateWidgets()
                         },
                         modifier = Modifier.align(Alignment.End).padding(bottom = 8.dp)
@@ -607,9 +622,39 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                                     else -> " (폭주 페널티 🔥)"
                                                 }
                                             } else ""
+
+                                                val intakeText = if (detail.itemName != null && detail.unit != null) {
+                                                    val contentUnit = if (itemName == "알코올") "g" else "mg"
+                                                    val count = if (itemName == "알코올") {
+                                                        detail.originalValue / (healthState.alcoholTypes.find { it.name == detail.itemName }?.content ?: 1f)
+                                                    } else if (itemName == "카페인") {
+                                                        detail.originalValue / (healthState.caffeineTypes.find { it.name == detail.itemName }?.content ?: 1f)
+                                                    } else {
+                                                        detail.originalValue
+                                                    }
+                                                    val countStr = if (count == count.toInt().toFloat()) "${count.toInt()}" else String.format("%.1f", count)
+                                                    "${detail.itemName} ${countStr}${detail.unit} / ${detail.originalValue.toInt()}$contentUnit"
+                                                } else {
+                                                    val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
+                                                    val formattedValue = if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동시간") {
+                                                        if (itemName == "활동시간") {
+                                                            val totalMinutes = (detail.originalValue * 60).roundToInt()
+                                                            val h = totalMinutes / 60
+                                                            val m = totalMinutes % 60
+                                                            when {
+                                                                h > 0 && m > 0 -> "${h}시간 ${m}분"
+                                                                h > 0 -> "${h}시간"
+                                                                else -> "${m}분"
+                                                            }
+                                                        } else {
+                                                            String.format(java.util.Locale.getDefault(), "%.1f", detail.originalValue)
+                                                        }
+                                                    } else "${detail.originalValue.toInt()}"
+                                                    "$formattedValue$unitInDetail"
+                                                }
                                             
                                             Text(
-                                                text = "기록: $formattedValue$unitInDetail$penaltyLabel",
+                                                text = "기록: $intakeText$penaltyLabel",
                                                 fontSize = 12.sp,
                                                 color = if (detail.isOverThreshold && itemName != "수면") Color(0xFFD32F2F) else Color.Gray
                                             )
