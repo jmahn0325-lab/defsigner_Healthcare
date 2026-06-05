@@ -80,6 +80,8 @@ class HealthState private constructor(private val context: Context?) {
     var selectedCaffeineType by mutableStateOf(caffeineTypes[0])
 
     private val _records = mutableStateListOf<HealthRecord>()
+    val allRecords: List<HealthRecord> get() = _records.toList()
+
     private val prefs: SharedPreferences? = context?.applicationContext?.getSharedPreferences("health_prefs", Context.MODE_PRIVATE)
 
     init {

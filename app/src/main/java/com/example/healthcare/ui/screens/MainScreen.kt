@@ -60,7 +60,19 @@ fun MainHealthSpectrumScreen(
 
     // 메인 화면 진입 시 점수 서버 동기화
     LaunchedEffect(healthState.getHealthScore()) {
-        repository.updateUserScore(healthState.userId, healthState.getHealthScore())
+        repository.updateUserScore(
+            uid = healthState.userId, 
+            score = healthState.getHealthScore(),
+            records = healthState.allRecords.filter { it.date == LocalDate.now() },
+            penalties = mapOf(
+                "알코올" to healthState.getTotalCurrentPenalty("알코올"),
+                "카페인" to healthState.getTotalCurrentPenalty("카페인"),
+                "흡연" to healthState.getTotalCurrentPenalty("흡연"),
+                "수면" to healthState.getTotalCurrentPenalty("수면"),
+                "활동시간" to healthState.getTotalCurrentPenalty("활동시간"),
+                "스크린 타임" to healthState.getTotalCurrentPenalty("스크린 타임")
+            )
+        )
     }
 
     val healthPermissions = setOf(

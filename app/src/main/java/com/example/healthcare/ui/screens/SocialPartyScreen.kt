@@ -2,11 +2,14 @@ package com.example.healthcare.ui.screens
 
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -24,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.healthcare.data.*
 import kotlinx.coroutines.launch
+import java.util.Locale
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -347,61 +353,112 @@ fun MemberDetailDialog(
             if (details == null) {
                 CircularProgressIndicator()
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     if (details!!.scores.isEmpty()) {
                         Text("비공개 항목이거나 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                     }
-                    details!!.scores.forEach { (factor, score) ->
-                        val logs = details!!.detailedLogs[factor] ?: emptyList()
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                    
+                    // 알코올, 카페인, 흡연 순서로 정렬하여 표시
+                    val displayOrder = listOf("알코올", "카페인", "흡연")
+                    displayOrder.forEach { factor ->
+                        if (details!!.scores.containsKey(factor)) {
+                            val score = details!!.scores[factor] ?: 0f
+                            val logs = details!!.detailedLogs[factor] ?: emptyList()
+                            
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Column {
-                                    Text(factor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                    Text("현재 상태: ${score.toInt()}점", fontSize = 12.sp, color = Color.Gray)
-                                }
-                                if (member.uid != myUid) {
-                                    IconButton(onClick = {
-                                        scope.launch {
-                                            val success = repository.sendNudge(myUid, member.uid, factor)
-                                            if (success) {
-                                                Toast.makeText(context, "${factor} 항목을 콕 찔렀습니다!", Toast.LENGTH_SHORT).show()
-                                            }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(factor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        
+                                        val unitLabel = when(factor) {
+                                            "알코올" -> "g"
+                                            "카페인" -> "mg"
+                                            "흡연" -> "개비"
+                                            else -> ""
                                         }
-                                    }) {
-                                        Icon(
-                                            Icons.Default.NotificationsActive,
-                                            contentDescription = "콕 찌르기",
-                                            tint = if (score < 60) Color.Red else Color.Gray
+                                        
+                                        val intake24h = details!!.totalIntake24h[factor] ?: 0f
+                                        
+                                        Text(
+                                            text = "총 감점: ${String.format(Locale.getDefault(), "%.2f", score)}점 / 24시간 섭취량: ${intake24h.toInt()}$unitLabel", 
+                                            fontSize = 12.sp, 
+                                            color = Color.Gray
                                         )
                                     }
-                                }
-                            }
-                            
-                            // 상세 로그 표시 (최근 7일 통합)
-                            if (logs.isNotEmpty()) {
-                                Surface(
-                                    color = Color(0xFFF5F5F5),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.padding(8.dp)) {
-                                        logs.take(15).forEach { log -> // 너무 많으면 상위 15개만
-                                            Text(
-                                                text = "• $log",
-                                                fontSize = 12.sp,
-                                                color = Color.DarkGray,
-                                                modifier = Modifier.padding(vertical = 2.dp)
+                                    if (member.uid != myUid) {
+                                        IconButton(onClick = {
+                                            scope.launch {
+                                                val success = repository.sendNudge(myUid, member.uid, factor)
+                                                if (success) {
+                                                    Toast.makeText(context, "${factor} 항목을 콕 찔렀습니다!", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        }) {
+                                            Icon(
+                                                Icons.Default.NotificationsActive,
+                                                contentDescription = "콕 찌르기",
+                                                tint = if (score < 60) Color.Red else Color.Gray
                                             )
                                         }
-                                        if (logs.size > 15) {
-                                            Text("...", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(start = 8.dp))
+                                    }
+                                }
+                                
+                                // 상세 로그 표시 (최근 7일 통합, 스크롤 가능)
+                                if (logs.isNotEmpty()) {
+                                    val logScrollState = rememberScrollState()
+                                    Surface(
+                                        color = Color(0xFFF5F5F5),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp)
+                                    ) {
+                                        Box {
+                                            Column(
+                                                modifier = Modifier
+                                                    .padding(12.dp)
+                                                    .verticalScroll(logScrollState)
+                                            ) {
+                                                logs.forEach { log ->
+                                                    Text(
+                                                        text = "• $log",
+                                                        fontSize = 12.sp,
+                                                        color = Color.DarkGray,
+                                                        modifier = Modifier.padding(vertical = 4.dp)
+                                                    )
+                                                }
+                                            }
+                                            
+                                            // 스크롤바 가시화
+                                            if (logScrollState.maxValue > 0) {
+                                                val scrollFraction = logScrollState.value.toFloat() / logScrollState.maxValue
+                                                Box(
+                                                    modifier = Modifier
+                                                        .align(Alignment.TopEnd)
+                                                        .padding(top = 2.dp, end = 2.dp, bottom = 2.dp)
+                                                        .width(3.dp)
+                                                        .fillMaxHeight()
+                                                        .background(Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(1.dp))
+                                                ) {
+                                                    val thumbHeightFraction = (160f / (160f + logScrollState.maxValue)).coerceIn(0.1f, 1f)
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .fillMaxHeight(thumbHeightFraction)
+                                                            .align(Alignment.TopStart)
+                                                            .offset(y = (160 * (1 - thumbHeightFraction) * scrollFraction).dp)
+                                                            .background(Color.Gray.copy(alpha = 0.7f), RoundedCornerShape(1.dp))
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }

@@ -201,65 +201,124 @@ class SocialRepository {
 
             // 3. 점수 합산 및 로그 통합
             val totalScores = mutableMapOf<String, Float>()
+            val totalIntake24h = mutableMapOf<String, Float>()
             val detailedLogs = mutableMapOf<String, MutableList<String>>()
 
-            // 최신 로그(첫 번째 문서)에서 현재 점수를 가져옴 (리더보드와 일관성)
+            // 24시간 계산을 위한 기준점
+            val now = java.time.LocalDateTime.now()
+            val twentyFourHoursAgo = now.minusHours(24)
+
+            // 최신 로그(첫 번째 문서)에서 현재 감점 정보를 가져옴 (리더보드와 일관성)
             val latestDoc = logsQuery.documents[0]
             val latestScores = latestDoc.get("scores") as? Map<String, Double> ?: emptyMap()
             latestScores.forEach { (factor, score) ->
-                totalScores[factor] = score.toFloat()
+                // 알코올, 카페인, 흡연 항목만 필터링
+                if (factor == "알코올" || factor == "카페인" || factor == "흡연") {
+                    totalScores[factor] = score.toFloat()
+                }
             }
 
-            // 7일간의 모든 로그 문서를 순회하며 레코드 수집
+            // 7일간의 모든 로그 문서를 순회하며 레코드 수집 및 24시간 섭취량 계산
+            // 최신 기록이 위로 가도록 하기 위해 수집 후 정렬
+            val allRawRecords = mutableListOf<Map<String, Any>>()
             logsQuery.documents.forEach { logDoc ->
                 val rawRecords = logDoc.get("records") as? List<Map<String, Any>> ?: return@forEach
-                rawRecords.forEach { recordMap ->
-                    val type = recordMap["type"] as? String ?: return@forEach
-                    val isVisible = when (type) {
-                        "알코올" -> privacy.alcoholVisible
-                        "카페인" -> privacy.caffeineVisible
-                        "흡연" -> privacy.smokingVisible
-                        else -> privacy.healthVisible
-                    }
+                allRawRecords.addAll(rawRecords)
+            }
+
+            allRawRecords.forEach { recordMap ->
+                val type = recordMap["type"] as? String ?: return@forEach
+                
+                // 알코올, 카페인, 흡연 항목만 필터링
+                if (type != "알코올" && type != "카페인" && type != "흡연") return@forEach
+
+                val recordDateStr = recordMap["date"] as? String ?: ""
+                val hour = (recordMap["hour"] as? Number)?.toInt() ?: 0
+                val minute = (recordMap["minute"] as? Number)?.toInt() ?: 0
+                
+                val recordDateTime = try {
+                    java.time.LocalDate.parse(recordDateStr).atTime(hour, minute)
+                } catch (e: Exception) { null }
+
+                val isVisible = when (type) {
+                    "알코올" -> privacy.alcoholVisible
+                    "카페인" -> privacy.caffeineVisible
+                    "흡연" -> privacy.smokingVisible
+                    else -> false
+                }
+                
+                if (isVisible) {
+                    val itemName = recordMap["itemName"] as? String
+                    val unit = recordMap["unit"] as? String
+                    val value = (recordMap["value"] as? Number)?.toFloat() ?: 0f
                     
-                    if (isVisible) {
-                        val itemName = recordMap["itemName"] as? String
-                        val unit = recordMap["unit"] as? String
-                        val value = (recordMap["value"] as? Number)?.toFloat() ?: 0f
-                        
-                        if (itemName != null && unit != null) {
-                            val emoji = when(type) {
-                                "알코올" -> "🍺"
-                                "카페인" -> "☕"
-                                "흡연" -> "🚬"
-                                else -> "📝"
-                            }
-                            val contentUnit = if (type == "알코올") "g" else if (type == "카페인") "mg" else "개비"
-                            
-                            // 비율 추론 (기존 로직 유지)
-                            val ratio = when(itemName) {
-                                "소주" -> 6.3f
-                                "맥주" -> 7.1f
-                                "와인" -> 15.4f
-                                "아메리카노" -> 150f
-                                "에너지 드링크" -> 100f
-                                "녹차" -> 30f
-                                else -> 1f
-                            }
-                            val count = value / ratio
-                            val countStr = if (count % 1f == 0f) "${count.toInt()}" else String.format(Locale.getDefault(), "%.1f", count)
-                            val logString = "$emoji $itemName ${countStr}$unit / ${value.toInt()}$contentUnit"
-                            
-                            val list = detailedLogs.getOrPut(type) { mutableListOf() }
-                            list.add(logString)
+                    // 24시간 내 섭취량 합산
+                    if (recordDateTime != null && recordDateTime.isAfter(twentyFourHoursAgo)) {
+                        totalIntake24h[type] = (totalIntake24h[type] ?: 0f) + value
+                    }
+
+                    if (itemName != null && unit != null) {
+                        val emoji = when(type) {
+                            "알코올" -> "🍺"
+                            "카페인" -> "☕"
+                            "흡연" -> "🚬"
+                            else -> "📝"
                         }
+                        val contentUnit = if (type == "알코올") "g" else if (type == "카페인") "mg" else "개비"
+
+                        // 상세 형식 포맷팅 (시간 포함)
+                        val timeStr = String.format(Locale.getDefault(), "%02d:%02d", hour, minute)
+                        
+                        val dateStr = (recordMap["date"] as? String)?.let { 
+                            try {
+                                val localDate = java.time.LocalDate.parse(it)
+                                localDate.format(java.time.format.DateTimeFormatter.ofPattern("MM/dd"))
+                            } catch(e: Exception) { "" }
+                        } ?: ""
+
+                        val fullTimePrefix = if (dateStr.isNotEmpty()) "$dateStr $timeStr\n" else ""
+
+                        // 비율 추론 (기존 로직 유지)
+                        val ratio = when(itemName) {
+                            "소주" -> 6.3f
+                            "맥주" -> 7.1f
+                            "와인" -> 15.4f
+                            "아메리카노" -> 150f
+                            "에너지 드링크" -> 100f
+                            "녹차" -> 30f
+                            else -> 1f
+                        }
+                        val count = value / ratio
+                        val countStr = if (count % 1f == 0f) "${count.toInt()}" else String.format(Locale.getDefault(), "%.1f", count)
+                        
+                        val isPenalty = when(type) {
+                            "알코올" -> value >= 20f
+                            "카페인" -> value >= 200f
+                            "흡연" -> value >= 7f
+                            else -> false
+                        }
+                        val penaltyTag = if (isPenalty) " (폭주 패널티)" else ""
+
+                        val logString = "$fullTimePrefix$emoji $itemName ${countStr}$unit / ${value.toInt()}$contentUnit$penaltyTag"
+                        
+                        // 로그 문자열 앞에 시간 정보를 포함하여 정렬 가능하게 함 (표시할 때는 그대로 사용)
+                        // 하지만 이미 allRawRecords가 정렬되어 있지 않으므로 수집 후 정렬이 필요함
+                        val sortKey = "${recordDateStr}_${String.format("%02d:%02d", hour, minute)}"
+                        
+                        val list = detailedLogs.getOrPut(type) { mutableListOf() }
+                        // 정렬을 위해 Pair로 저장하거나 나중에 정렬
+                        list.add("$sortKey|$logString")
                     }
                 }
             }
 
-            // 이미 정렬된 logsQuery(DESCENDING)를 순회했으므로 리스트 내의 순서는 최신이 앞임.
-            // (만약 한 날짜 내에서 여러 기록이 있다면 입력 순서에 따름)
-            MemberDetails(memberUid, displayName, totalScores, detailedLogs)
+            // 각 항목별 로그를 시간순(최신순)으로 정렬
+            val sortedDetailedLogs = detailedLogs.mapValues { (_, list) ->
+                list.sortedByDescending { it.split("|")[0] }
+                    .map { it.split("|")[1] }
+            }
+
+            MemberDetails(memberUid, displayName, totalScores, totalIntake24h, sortedDetailedLogs)
         } catch (e: Exception) {
             Log.e("SocialRepository", "Error fetching member details", e)
             null
@@ -303,15 +362,38 @@ class SocialRepository {
         }
     }
 
-    // 유저 점수 동기화
-    suspend fun updateUserScore(uid: String, score: Int): Boolean {
+    // 유저 점수 및 상세 로그 동기화
+    suspend fun updateUserScore(uid: String, score: Int, records: List<HealthRecord> = emptyList(), penalties: Map<String, Float> = emptyMap()): Boolean {
         return try {
-            db.collection("Users").document(uid)
-                .update("totalScore", score)
-                .await()
+            val userRef = db.collection("Users").document(uid)
+            
+            // 1. 기본 점수 업데이트
+            userRef.update("totalScore", score).await()
+            
+            // 2. 오늘의 상세 로그 업로드 (DailyLogs 서브 컬렉션)
+            val today = java.time.LocalDate.now().toString()
+            val logData = mapOf(
+                "date" to today,
+                "timestamp" to FieldValue.serverTimestamp(),
+                "scores" to penalties, // 실제 감점량 (예: "알코올" -> -12.5f)
+                "records" to records.map { record ->
+                    mapOf(
+                        "type" to record.type,
+                        "value" to record.value,
+                        "itemName" to record.itemName,
+                        "unit" to record.unit,
+                        "hour" to record.hour,
+                        "minute" to record.minute,
+                        "date" to record.date.toString()
+                    )
+                }
+            )
+            
+            userRef.collection("DailyLogs").document(today).set(logData).await()
+            
             true
         } catch (e: Exception) {
-            Log.e("SocialRepository", "Error updating score", e)
+            Log.e("SocialRepository", "Error updating score and logs", e)
             false
         }
     }

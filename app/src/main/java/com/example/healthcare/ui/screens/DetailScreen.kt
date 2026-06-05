@@ -389,14 +389,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                             fontWeight = FontWeight.ExtraBold,
                             color = if (totalPenalty < 0) Color(0xFFD32F2F) else Color(0xFF2E7D32)
                         )
-                        if (totalPenalty < 0) {
-                            Text(
-                                text = if (itemName == "수면") "꾸준히 충분한 수면을 취하면 점수가 회복됩니다." else "시간이 지나면 점수가 서서히 회복됩니다.",
-                                fontSize = 12.sp,
-                                color = Color(0xFFD32F2F).copy(alpha = 0.7f),
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
                     }
                 }
             }
@@ -587,8 +579,19 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     if (penaltyDetails.isEmpty()) {
                         Text(text = "기록된 데이터가 없습니다.", color = Color.Gray, modifier = Modifier.padding(vertical = 16.dp))
                     } else {
-                        Box(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).background(Color(0xFFF9F9F9), RoundedCornerShape(8.dp)).border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))) {
-                            Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
+                        val scrollState = rememberScrollState()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 300.dp)
+                                .background(Color(0xFFF9F9F9), RoundedCornerShape(8.dp))
+                                .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .verticalScroll(scrollState)
+                                    .padding(12.dp)
+                            ) {
                                 penaltyDetails.forEach { detail ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -603,21 +606,36 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
-                                            val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
-                                            val formattedValue = if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동시간") {
-                                                if (itemName == "활동시간") {
-                                                    val totalMinutes = (detail.originalValue * 60).roundToInt()
-                                                    val h = totalMinutes / 60
-                                                    val m = totalMinutes % 60
-                                                    when {
-                                                        h > 0 && m > 0 -> "${h}시간 ${m}분"
-                                                        h > 0 -> "${h}시간"
-                                                        else -> "${m}분"
-                                                    }
+                                            val intakeText = if (detail.itemName != null && detail.unit != null) {
+                                                val contentUnit = if (itemName == "알코올") "g" else "mg"
+                                                val count = if (itemName == "알코올") {
+                                                    detail.originalValue / (healthState.alcoholTypes.find { it.name == detail.itemName }?.content ?: 1f)
+                                                } else if (itemName == "카페인") {
+                                                    detail.originalValue / (healthState.caffeineTypes.find { it.name == detail.itemName }?.content ?: 1f)
                                                 } else {
-                                                    String.format(java.util.Locale.getDefault(), "%.1f", detail.originalValue)
+                                                    detail.originalValue
                                                 }
-                                            } else "${detail.originalValue.toInt()}"
+                                                val countStr = if (count == count.toInt().toFloat()) "${count.toInt()}" else String.format("%.1f", count)
+                                                "${detail.itemName} ${countStr}${detail.unit} / ${detail.originalValue.toInt()}$contentUnit"
+                                            } else {
+                                                val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
+                                                val formattedValue = if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동시간") {
+                                                    if (itemName == "활동시간") {
+                                                        val totalMinutes = (detail.originalValue * 60).roundToInt()
+                                                        val h = totalMinutes / 60
+                                                        val m = totalMinutes % 60
+                                                        when {
+                                                            h > 0 && m > 0 -> "${h}시간 ${m}분"
+                                                            h > 0 -> "${h}시간"
+                                                            else -> "${m}분"
+                                                        }
+                                                    } else {
+                                                        String.format(java.util.Locale.getDefault(), "%.1f", detail.originalValue)
+                                                    }
+                                                } else "${detail.originalValue.toInt()}"
+                                                "$formattedValue$unitInDetail"
+                                            }
+                                            
                                             val penaltyLabel = if (detail.isOverThreshold) {
                                                 when (itemName) {
                                                     "수면" -> " (수면 부족 💤)"
@@ -626,36 +644,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                                     else -> " (폭주 페널티 🔥)"
                                                 }
                                             } else ""
-
-                                                val intakeText = if (detail.itemName != null && detail.unit != null) {
-                                                    val contentUnit = if (itemName == "알코올") "g" else "mg"
-                                                    val count = if (itemName == "알코올") {
-                                                        detail.originalValue / (healthState.alcoholTypes.find { it.name == detail.itemName }?.content ?: 1f)
-                                                    } else if (itemName == "카페인") {
-                                                        detail.originalValue / (healthState.caffeineTypes.find { it.name == detail.itemName }?.content ?: 1f)
-                                                    } else {
-                                                        detail.originalValue
-                                                    }
-                                                    val countStr = if (count == count.toInt().toFloat()) "${count.toInt()}" else String.format("%.1f", count)
-                                                    "${detail.itemName} ${countStr}${detail.unit} / ${detail.originalValue.toInt()}$contentUnit"
-                                                } else {
-                                                    val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
-                                                    val formattedValue = if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동시간") {
-                                                        if (itemName == "활동시간") {
-                                                            val totalMinutes = (detail.originalValue * 60).roundToInt()
-                                                            val h = totalMinutes / 60
-                                                            val m = totalMinutes % 60
-                                                            when {
-                                                                h > 0 && m > 0 -> "${h}시간 ${m}분"
-                                                                h > 0 -> "${h}시간"
-                                                                else -> "${m}분"
-                                                            }
-                                                        } else {
-                                                            String.format(java.util.Locale.getDefault(), "%.1f", detail.originalValue)
-                                                        }
-                                                    } else "${detail.originalValue.toInt()}"
-                                                    "$formattedValue$unitInDetail"
-                                                }
                                             
                                             Text(
                                                 text = "기록: $intakeText$penaltyLabel",
@@ -671,6 +659,29 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                         )
                                     }
                                     HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+                                }
+                            }
+                            
+                            // 스크롤바 가시화
+                            if (scrollState.maxValue > 0) {
+                                val scrollFraction = scrollState.value.toFloat() / scrollState.maxValue
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 4.dp, end = 2.dp, bottom = 4.dp)
+                                        .width(4.dp)
+                                        .fillMaxHeight()
+                                        .background(Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(2.dp))
+                                ) {
+                                    val thumbHeightFraction = (300f / (300f + scrollState.maxValue)).coerceIn(0.1f, 1f)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .fillMaxHeight(thumbHeightFraction)
+                                            .align(Alignment.TopStart)
+                                            .offset(y = (300 * (1 - thumbHeightFraction) * scrollFraction).dp)
+                                            .background(Color.Gray.copy(alpha = 0.7f), RoundedCornerShape(2.dp))
+                                    )
                                 }
                             }
                         }
