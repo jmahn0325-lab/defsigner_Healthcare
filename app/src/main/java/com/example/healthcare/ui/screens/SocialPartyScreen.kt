@@ -1,7 +1,7 @@
 package com.example.healthcare.ui.screens
 
+import android.util.Log
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.*
@@ -33,39 +34,51 @@ fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
     
     var showCreateDialog by remember { mutableStateOf(false) }
     var showJoinDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf<Party?>(null) }
     var selectedMember by remember { mutableStateOf<UserScore?>(null) }
+    var viewingParty by remember { mutableStateOf<Party?>(null) }
     
     var partyNameInput by remember { mutableStateOf("") }
     var inviteCodeInput by remember { mutableStateOf("") }
+    var editNameInput by remember { mutableStateOf("") }
     
-    // 임시 데이터 (실제로는 Firestore에서 실시간 리스너나 StateFlow로 가져와야 함)
-    // 현재는 편의상 단일 파티 시나리오로 구현
-    val currentPartyId = "global_party_id" // 예시
+    // 실시간 파티 목록 구독
+    val myParties by repository.getMyPartiesFlow(myUid).collectAsState(initial = emptyList())
     var leaderboard by remember { mutableStateOf<List<UserScore>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
 
-    // 데이터 로드
     LaunchedEffect(Unit) {
-        isLoading = true
-        leaderboard = repository.getPartyLeaderboard(currentPartyId)
-        isLoading = false
+        Log.d("SocialPartyScreen", "Initial load with myUid: $myUid")
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("소셜 파티", fontWeight = FontWeight.Bold) },
+                title = { 
+                    Text(
+                        text = if (viewingParty != null) viewingParty!!.partyName else "소셜 파티", 
+                        fontWeight = FontWeight.Bold 
+                    ) 
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (viewingParty != null) {
+                            viewingParty = null
+                        } else {
+                            onBack()
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로가기")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showCreateDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "파티 생성")
-                    }
-                    IconButton(onClick = { showJoinDialog = true }) {
-                        Icon(Icons.Default.Group, contentDescription = "파티 참여")
+                    if (viewingParty == null) {
+                        IconButton(onClick = { showCreateDialog = true }) {
+                            Icon(Icons.Default.Add, contentDescription = "파티 생성")
+                        }
+                        IconButton(onClick = { showJoinDialog = true }) {
+                            Icon(Icons.Default.Group, contentDescription = "파티 참여")
+                        }
                     }
                 }
             )
@@ -74,32 +87,68 @@ fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (leaderboard.isEmpty()) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("참여 중인 파티가 없습니다.", color = Color.Gray)
-                    Text("친구를 초대하거나 코드를 입력해 참여하세요!", color = Color.Gray, fontSize = 12.sp)
+            } else if (viewingParty == null) {
+                // 내 파티 목록 보기
+                if (myParties.isEmpty()) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("참여 중인 파티가 없습니다.", color = Color.Gray)
+                        Text("친구를 초대하거나 코드를 입력해 참여하세요!", color = Color.Gray, fontSize = 12.sp)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(vertical = 16.dp)
+                    ) {
+                        item {
+                            Text("나의 파티 목록", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        itemsIndexed(myParties) { _, party ->
+                            PartyItem(
+                                party = party,
+                                onEdit = { 
+                                    showEditDialog = party
+                                    editNameInput = party.partyName
+                                },
+                                onClick = {
+                                    viewingParty = party
+                                    scope.launch {
+                                        isLoading = true
+                                        leaderboard = repository.getPartyLeaderboard(party.partyId)
+                                        isLoading = false
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp)
-                ) {
-                    item {
-                        Text("파티 리더보드", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                    
-                    itemsIndexed(leaderboard) { index, member ->
-                        LeaderboardItem(
-                            rank = index + 1,
-                            member = member,
-                            isMe = member.uid == myUid,
-                            onClick = { selectedMember = member }
-                        )
+                // 특정 파티의 리더보드 보기
+                if (leaderboard.isEmpty()) {
+                    Text("멤버 정보를 가져올 수 없습니다.", modifier = Modifier.align(Alignment.Center), color = Color.Gray)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 16.dp)
+                    ) {
+                        item {
+                            Text("리더보드", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        
+                        itemsIndexed(leaderboard) { index, member ->
+                            LeaderboardItem(
+                                rank = index + 1,
+                                member = member,
+                                isMe = member.uid == myUid,
+                                onClick = { selectedMember = member }
+                            )
+                        }
                     }
                 }
             }
@@ -152,13 +201,41 @@ fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
                         val success = repository.joinParty(inviteCodeInput, myUid)
                         if (success) {
                             Toast.makeText(context, "파티에 참여했습니다!", Toast.LENGTH_SHORT).show()
-                            leaderboard = repository.getPartyLeaderboard(currentPartyId) // 갱신
                         } else {
-                            Toast.makeText(context, "잘못된 코드입니다.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "잘못된 코드이거나 참여할 수 없습니다.", Toast.LENGTH_SHORT).show()
                         }
                         showJoinDialog = false
                     }
                 }) { Text("참여") }
+            }
+        )
+    }
+
+    // 파티 이름 수정 다이얼로그
+    if (showEditDialog != null) {
+        AlertDialog(
+            onDismissRequest = { showEditDialog = null },
+            title = { Text("파티 이름 수정") },
+            text = {
+                OutlinedTextField(
+                    value = editNameInput,
+                    onValueChange = { editNameInput = it },
+                    label = { Text("새로운 이름") }
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    scope.launch {
+                        val success = repository.updatePartyName(showEditDialog!!.partyId, editNameInput)
+                        if (success) {
+                            Toast.makeText(context, "이름이 수정되었습니다.", Toast.LENGTH_SHORT).show()
+                        }
+                        showEditDialog = null
+                    }
+                }) { Text("수정") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = null }) { Text("취소") }
             }
         )
     }
@@ -171,6 +248,45 @@ fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
             myUid = myUid,
             onDismiss = { selectedMember = null }
         )
+    }
+}
+
+@Composable
+fun PartyItem(party: Party, onEdit: () -> Unit, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = party.partyName, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(onClick = onEdit, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Edit, contentDescription = "이름 수정", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                    }
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = "${party.memberUids.size}명",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = "초대 코드: ${party.inviteCode}", fontSize = 14.sp, color = Color.Gray)
+        }
     }
 }
 

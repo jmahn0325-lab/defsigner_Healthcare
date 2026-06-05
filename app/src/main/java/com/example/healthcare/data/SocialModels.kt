@@ -1,13 +1,12 @@
 package com.example.healthcare.data
 
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.DocumentId
 
 /**
  * 파티(그룹) 정보
  */
 data class Party(
-    @DocumentId val partyId: String = "",
+    val partyId: String = "",
     val partyName: String = "",
     val inviteCode: String = "",
     val memberUids: List<String> = emptyList(),

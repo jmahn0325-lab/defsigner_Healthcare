@@ -1,8 +1,13 @@
 package com.example.healthcare.data
 
+import android.util.Log
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.util.*
 
@@ -19,6 +24,7 @@ class SocialRepository {
 
     // 새로운 파티 생성
     suspend fun createParty(partyName: String, leaderUid: String): String {
+        Log.d("SocialRepository", "createParty called for leaderUid: $leaderUid")
         return try {
             val inviteCode = generateInviteCode()
             val partyId = UUID.randomUUID().toString()
@@ -32,9 +38,66 @@ class SocialRepository {
             )
             
             db.collection("Parties").document(partyId).set(partyData).await()
+            Log.d("SocialRepository", "Party created successfully: $partyId")
             inviteCode
         } catch (e: Exception) {
+            Log.e("SocialRepository", "Error creating party", e)
             "ERROR"
+        }
+    }
+
+    // 내가 속한 파티 목록 실시간 감시 (Flow)
+    fun getMyPartiesFlow(myUid: String): Flow<List<Party>> = callbackFlow {
+        Log.d("SocialRepository", "getMyPartiesFlow started for myUid: $myUid")
+        
+        val query = db.collection("Parties")
+            .whereArrayContains("memberUids", myUid)
+
+        val listener = query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("SocialRepository", "Listen failed", error)
+                close(error)
+                return@addSnapshotListener
+            }
+
+            if (snapshot != null) {
+                val parties = snapshot.toObjects(Party::class.java)
+                Log.d("SocialRepository", "Real-time update: ${parties.size} parties found")
+                // createdAt 정보가 서버에서 아직 오지 않았을 경우를 고려해 안전하게 정렬
+                val sortedParties = parties.sortedByDescending { it.createdAt }
+                trySend(sortedParties)
+            }
+        }
+
+        awaitClose { 
+            Log.d("SocialRepository", "getMyPartiesFlow closed")
+            listener.remove()
+        }
+    }
+
+    // 내 파티 목록 가져오기 (단회성)
+    suspend fun getMyParties(myUid: String): List<Party> {
+        return try {
+            val query = db.collection("Parties")
+                .whereArrayContains("memberUids", myUid)
+                .get()
+                .await()
+            query.toObjects(Party::class.java).sortedByDescending { it.createdAt }
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "Error getting my parties", e)
+            emptyList()
+        }
+    }
+
+    // 파티 이름 수정
+    suspend fun updatePartyName(partyId: String, newName: String): Boolean {
+        return try {
+            db.collection("Parties").document(partyId)
+                .update("partyName", newName)
+                .await()
+            true
+        } catch (e: Exception) {
+            false
         }
     }
 
