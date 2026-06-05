@@ -403,4 +403,15 @@ class SocialRepository {
             false
         }
     }
+
+    // FCM 토큰 업데이트
+    suspend fun updateFcmToken(uid: String, token: String): Boolean {
+        return try {
+            db.collection("Users").document(uid).update("fcmToken", token).await()
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "Error updating FCM token", e)
+            false
+        }
+    }
 }
