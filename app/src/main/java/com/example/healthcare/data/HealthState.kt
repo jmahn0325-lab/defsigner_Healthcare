@@ -38,7 +38,7 @@ class HealthState private constructor(private val context: Context?) {
     var caffeineTarget by mutableFloatStateOf(30f)
     var sleepTarget by mutableFloatStateOf(8f)
     var stepsTarget by mutableFloatStateOf(10000f)
-    var standTarget by mutableFloatStateOf(12f)
+    var activityTarget by mutableFloatStateOf(2.0f) // 활동시간 목표: 2.0시간 (120분)으로 조정
     var screenTimeTarget by mutableFloatStateOf(6f)
 
     // 알코올 및 카페인 종류 리스트 (초기 단위 설정)
@@ -61,31 +61,6 @@ class HealthState private constructor(private val context: Context?) {
 
     init {
         if (!loadFromStorage()) {
-            val today = LocalDate.now()
-            val manualTypes = listOf("알코올", "흡연", "카페인")
-            val autoTypes = listOf("수면", "걸음수", "활동시간", "스크린 타임")
-            for (i in 0..35) {
-                val date = today.minusDays(i.toLong())
-                manualTypes.forEach { type ->
-                    val value = when (type) {
-                        "알코올" -> (0..5).random().toFloat() * 1f
-                        "흡연" -> (0..10).random().toFloat()
-                        "카페인" -> (0..3).random().toFloat() * 10f
-                        else -> 0f
-                    }
-                    _records.add(HealthRecord(date, 12, type, value))
-                }
-                autoTypes.forEach { type ->
-                    val value = when (type) {
-                        "수면" -> (4..9).random().toFloat()
-                        "걸음수" -> (2000..12000).random().toFloat()
-                        "활동시간" -> (5..15).random().toFloat()
-                        "스크린 타임" -> (1..10).random().toFloat()
-                        else -> 0f
-                    }
-                    _records.add(HealthRecord(date, null, type, value))
-                }
-            }
             saveToStorage()
         }
         loadSelections()
@@ -170,15 +145,25 @@ class HealthState private constructor(private val context: Context?) {
         val today = LocalDate.now()
         val formatter = DateTimeFormatter.ofPattern("M/d")
 
+        // 데이터가 있는 가장 오래된 날짜 확인
+        val oldestRecordDate = _records.filter { it.type == type }.minByOrNull { it.date }?.date ?: today
+
         return if (period == "단위(일)") {
-            (4 downTo 0).map { i ->
+            (4 downTo 0).mapNotNull { i ->
                 val date = today.minusDays(i.toLong())
+                // 데이터가 전혀 없는 날(설치 전)은 차트에서 제외 (단, 오늘부터 과거 5일 중 데이터가 있는 시점까지만)
+                if (date.isBefore(oldestRecordDate)) return@mapNotNull null
+                
                 val value = getValueForDate(type, date)
                 Pair(date.format(formatter), value)
             }
         } else {
-            (4 downTo 0).map { i ->
+            (4 downTo 0).mapNotNull { i ->
                 val weekStart = today.minusWeeks(i.toLong()).with(DayOfWeek.MONDAY)
+                // 해당 주차에 데이터가 하나도 없으면 제외
+                val hasDataInWeek = _records.any { it.type == type && !it.date.isBefore(weekStart) && !it.date.isAfter(weekStart.plusDays(6)) }
+                if (!hasDataInWeek && weekStart.isBefore(oldestRecordDate.with(DayOfWeek.MONDAY))) return@mapNotNull null
+
                 var weeklySum = 0f
                 for (d in 0..6) {
                     val date = weekStart.plusDays(d.toLong())
@@ -194,10 +179,10 @@ class HealthState private constructor(private val context: Context?) {
     // 걸음수를 제외한 각 건강 지표를 통해 0~100점의 종합 점수를 계산합니다.
     fun getHealthScore(): Int {
         var score = 100f
-        val stand = getTodayValue("활동시간")
+        val activity = getTodayValue("활동시간")
 
         // 자동 측정 항목 감점 (가중치 적용)
-        val standPenalty = if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
+        val activityPenalty = if (activity in 0.1f..activityTarget) (activityTarget - activity) * 2f else 0f
         
         // 수동 입력 항목 및 수면/스크린 타임 감점
         val alcoholPenalty = getTotalCurrentPenalty("알코올")
@@ -207,7 +192,7 @@ class HealthState private constructor(private val context: Context?) {
         val screenPenalty = getTotalCurrentPenalty("스크린 타임")
 
         // score += penalty 인 이유는 각 Penalty 메서드가 음수(감점) 또는 양수(보너스)를 반환하기 때문입니다.
-        score -= standPenalty
+        score -= activityPenalty
         score += (alcoholPenalty + smokePenalty + caffeinePenalty + sleepPenalty + screenPenalty)
         
         return Math.round(score).toInt().coerceIn(0, 100)
@@ -215,10 +200,10 @@ class HealthState private constructor(private val context: Context?) {
 
     // 가장 감점이 큰 요소를 찾아 맞춤형 피드백을 제공합니다.
     fun getHealthFeedback(): String {
-        val stand = getTodayValue("활동시간")
+        val activity = getTodayValue("활동시간")
 
         val penalties = mutableMapOf(
-            "활동시간" to if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
+            "활동시간" to if (activity in 0.1f..activityTarget) (activityTarget - activity) * 2f else 0f
         )
         
         val checkTypes = mutableListOf("카페인", "수면", "스크린 타임", "알코올", "흡연")
@@ -287,7 +272,7 @@ class HealthState private constructor(private val context: Context?) {
 
     private fun calculateSleepScore(hours: Float): Float {
         val h = hours.coerceAtMost(7f)
-        return (-10f * Math.pow((h - 7.0), 2.0) + 5f).toFloat()
+        return (-10f * Math.pow((h - 7.0), 2.0) ).toFloat()
     }
 
     fun getPenaltyDetails(type: String): List<PenaltyDetail> {

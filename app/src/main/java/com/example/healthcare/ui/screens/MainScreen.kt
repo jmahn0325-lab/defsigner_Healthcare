@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import com.example.healthcare.data.HealthState
@@ -49,6 +50,7 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
     val healthPermissions = setOf(
         HealthPermission.getReadPermission(StepsRecord::class),
         HealthPermission.getReadPermission(SleepSessionRecord::class),
+        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
     )
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -190,7 +192,7 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                     
                     val activeTime = healthState.getTodayValue("활동시간")
                     val activeDisplay = if (activeTime < 1f && activeTime > 0f) "${(activeTime * 60).toInt()}분" else String.format(Locale.getDefault(), "%.1f시간", activeTime)
-                    HealthApiRecord("🧍", "활동시간", activeDisplay, progress = activeTime / healthState.standTarget.coerceAtLeast(1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("활동시간") })
+                    HealthApiRecord("🧍", "활동시간", activeDisplay, progress = activeTime / healthState.activityTarget.coerceAtLeast(1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("활동시간") })
                 }
 
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {

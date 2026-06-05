@@ -5,6 +5,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
@@ -72,54 +73,57 @@ suspend fun fetchHistoricalActiveTime(client: HealthConnectClient, days: Int): M
                 continue
             }
 
-            val request = ReadRecordsRequest(
-                recordType = StepsRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startOfDay, actualEnd)
-            )
+            // 삼성 헬스 방식: 분 단위로 활동 여부를 체크하여 '활동적인 분(Active Minutes)'의 총합 계산
+            val activeMinutesSet = mutableSetOf<Long>() 
 
-            val response = client.readRecords(request)
-            val stepsByPackage = mutableMapOf<String, Long>()
-            response.records.forEach { record ->
-                val packageName = record.metadata.dataOrigin.packageName
-                stepsByPackage[packageName] = (stepsByPackage[packageName] ?: 0L) + record.count
-            }
-            val targetPackage = stepsByPackage.maxByOrNull { it.value }?.key
-
-            if (targetPackage == null) {
-                map[date] = 0f
-                continue
-            }
-
-            val targetRecords = response.records.filter { it.metadata.dataOrigin.packageName == targetPackage }
-            val detailedRecords = targetRecords.filter { Duration.between(it.startTime, it.endTime).seconds < 14400 }
-
-            var totalActiveSeconds = 0L
-
-            if (detailedRecords.isEmpty() && targetRecords.isNotEmpty()) {
-                val totalSteps = targetRecords.sumOf { it.count }
-                totalActiveSeconds = (totalSteps * 0.8).toLong()
-            } else {
-                val sortedRecords = detailedRecords.sortedBy { it.startTime }
-                var currentEnd = Instant.MIN
-
-                for (record in sortedRecords) {
-                    val start = record.startTime
-                    val end = record.endTime
-
-                    if (end.isAfter(currentEnd)) {
-                        val effectiveStart = if (start.isAfter(currentEnd)) start else currentEnd
-                        val diffSeconds = Duration.between(effectiveStart, end).seconds
-                        val maxPlausibleSeconds = record.count * 2L
-                        val durationSeconds = if (diffSeconds == 0L && record.count > 0) 10L else minOf(diffSeconds, maxPlausibleSeconds)
-
-                        totalActiveSeconds += durationSeconds
-                        currentEnd = effectiveStart.plusSeconds(durationSeconds)
+            // 1. 명시적 운동 세션 (무조건 활동으로 간주)
+            try {
+                val exerciseRequest = ReadRecordsRequest(
+                    recordType = ExerciseSessionRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startOfDay, actualEnd)
+                )
+                client.readRecords(exerciseRequest).records.forEach { record ->
+                    var temp = record.startTime.truncatedTo(ChronoUnit.MINUTES)
+                    while (temp.isBefore(record.endTime)) {
+                        activeMinutesSet.add(temp.toEpochMilli())
+                        temp = temp.plus(1, ChronoUnit.MINUTES)
                     }
                 }
-            }
-            map[date] = totalActiveSeconds.toFloat() / 3600f
+            } catch (e: Exception) { e.printStackTrace() }
+
+            // 2. 걸음 데이터를 통한 활동 판정
+            try {
+                val stepsRequest = ReadRecordsRequest(
+                    recordType = StepsRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startOfDay, actualEnd)
+                )
+                val stepsResponse = client.readRecords(stepsRequest)
+                
+                // 모든 소스의 활동을 합집합으로 처리
+                stepsResponse.records.forEach { record ->
+                    val durationMillis = Duration.between(record.startTime, record.endTime).toMillis()
+                    val durationMinutes = durationMillis / (1000.0 * 60.0)
+                    
+                    // 강도(Intensity) 계산: 분당 걸음 수 (Cadence)
+                    val cadence = if (durationMinutes > 0) record.count / durationMinutes else record.count.toDouble()
+                    
+                    // 판정 기준: 삼성 헬스는 보통 분당 70~80보 이상을 '활동적'으로 판단함
+                    if (cadence >= 70 || (record.count >= 30 && durationMinutes <= 1.5)) {
+                        var temp = record.startTime.truncatedTo(ChronoUnit.MINUTES)
+                        while (!temp.isAfter(record.endTime)) {
+                            activeMinutesSet.add(temp.toEpochMilli())
+                            temp = temp.plus(1, ChronoUnit.MINUTES)
+                        }
+                    }
+                }
+            } catch (e: Exception) { e.printStackTrace() }
+
+            // 최종 활동 시간(시간 단위) = 활동적인 분들의 개수 / 60
+            map[date] = activeMinutesSet.size.toFloat() / 60f
         }
-    } catch (e: Exception) { e.printStackTrace() }
+    } catch (e: Exception) { 
+        e.printStackTrace()
+    }
     return map
 }
 

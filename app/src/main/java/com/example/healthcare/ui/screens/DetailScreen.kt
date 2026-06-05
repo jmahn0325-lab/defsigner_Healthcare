@@ -77,7 +77,8 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
     val targetMax = when (itemName) {
         "걸음수" -> 20000f
-        "수면", "활동시간", "스크린 타임" -> 24f
+        "수면", "스크린 타임" -> 24f
+        "활동시간" -> 5f // 활동시간 최대 목표치를 5시간으로 조정 (현실적 범위)
         "흡연" -> 26f
         "알코올" -> 24f
         "카페인" -> 30f
@@ -91,7 +92,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         "카페인" -> healthState.caffeineTarget
         "수면" -> healthState.sleepTarget
         "걸음수" -> healthState.stepsTarget
-        "활동시간" -> healthState.standTarget
+        "활동시간" -> healthState.activityTarget
         "스크린 타임" -> healthState.screenTimeTarget
         else -> 10f
     }
@@ -105,7 +106,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             "카페인" -> healthState.caffeineTarget = internalVal
             "수면" -> healthState.sleepTarget = internalVal
             "걸음수" -> healthState.stepsTarget = internalVal
-            "활동시간" -> healthState.standTarget = internalVal
+            "활동시간" -> healthState.activityTarget = internalVal
             "스크린 타임" -> healthState.screenTimeTarget = internalVal
         }
     }
