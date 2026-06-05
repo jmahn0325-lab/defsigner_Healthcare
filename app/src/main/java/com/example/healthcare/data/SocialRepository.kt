@@ -229,6 +229,18 @@ class SocialRepository {
             allRawRecords.forEach { recordMap ->
                 val type = recordMap["type"] as? String ?: return@forEach
 
+                // recordDateTime 복구 (date, hour, minute, second 활용)
+                val dateStr = recordMap["date"] as? String ?: ""
+                val hour = (recordMap["hour"] as? Number)?.toInt() ?: 0
+                val minute = (recordMap["minute"] as? Number)?.toInt() ?: 0
+                val second = (recordMap["second"] as? Number)?.toInt() ?: 0
+
+                val recordDateTime = try {
+                    java.time.LocalDate.parse(dateStr).atTime(hour, minute, second)
+                } catch (e: Exception) {
+                    now
+                }
+
                 val isVisible = when (type) {
                     "알코올" -> privacy.alcoholVisible
                     "카페인" -> privacy.caffeineVisible
