@@ -416,10 +416,11 @@ fun MemberDetailDialog(
                                 // 상세 로그 표시 (최근 7일 통합, 스크롤 가능)
                                 if (logs.isNotEmpty()) {
                                     val logScrollState = rememberScrollState()
+                                    val maxHeight = if (factor == "흡연") 300.dp else 160.dp
                                     Surface(
                                         color = Color(0xFFF5F5F5),
                                         shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp)
+                                        modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight)
                                     ) {
                                         Box {
                                             Column(
@@ -449,13 +450,13 @@ fun MemberDetailDialog(
                                                         .fillMaxHeight()
                                                         .background(Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(1.dp))
                                                 ) {
-                                                    val thumbHeightFraction = (160f / (160f + logScrollState.maxValue)).coerceIn(0.1f, 1f)
+                                                    val thumbHeightFraction = (maxHeight.value / (maxHeight.value + (logScrollState.maxValue / 2.5f))).coerceIn(0.1f, 1f)
                                                     Box(
                                                         modifier = Modifier
                                                             .fillMaxWidth()
                                                             .fillMaxHeight(thumbHeightFraction)
                                                             .align(Alignment.TopStart)
-                                                            .offset(y = (160 * (1 - thumbHeightFraction) * scrollFraction).dp)
+                                                            .offset(y = (maxHeight.value * (1 - thumbHeightFraction) * scrollFraction).dp)
                                                             .background(Color.Gray.copy(alpha = 0.7f), RoundedCornerShape(1.dp))
                                                     )
                                                 }
