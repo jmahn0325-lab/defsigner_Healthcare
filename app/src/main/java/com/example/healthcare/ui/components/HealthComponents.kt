@@ -91,35 +91,45 @@ fun HealthApiRecord(emoji: String, title: String, value: String, progress: Float
 }
 
 @Composable
-fun CustomBarChart(data: List<Pair<String, Float>>, isWeekly: Boolean, modifier: Modifier = Modifier) {
+fun CustomBarChart(data: List<Pair<String, Float>>, isWeekly: Boolean, modifier: Modifier = Modifier, yAxisTitle: String = "") {
     val rawMax = data.maxOfOrNull { it.second } ?: 10f
     val maxDataValue = (rawMax * 1.2f).coerceAtLeast(10f)
     val yAxisLabels = listOf(maxDataValue.toInt().toString(), (maxDataValue / 2).toInt().toString(), "0")
 
-    Box(modifier = modifier) {
-        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            yAxisLabels.forEach { label ->
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = label, fontSize = 10.sp, color = Color.Gray, modifier = Modifier.width(40.dp), textAlign = TextAlign.End, maxLines = 1)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.LightGray))
+    Column(modifier = modifier) {
+        if (yAxisTitle.isNotEmpty()) {
+            Text(
+                text = "($yAxisTitle)",
+                fontSize = 10.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
+            )
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                yAxisLabels.forEach { label ->
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = label, fontSize = 10.sp, color = Color.Gray, modifier = Modifier.width(40.dp), textAlign = TextAlign.End, maxLines = 1)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.LightGray))
+                    }
                 }
             }
-        }
-        Row(modifier = Modifier.fillMaxSize().padding(start = 48.dp, top = 24.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
-            data.forEach { (_, value) ->
-                val heightFraction = (value / maxDataValue).coerceIn(0f, 1f)
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom, modifier = Modifier.fillMaxHeight()) {
-                    Text(text = value.toInt().toString(), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 2.dp))
-                    Box(modifier = Modifier.width(if (isWeekly) 40.dp else 24.dp).fillMaxHeight(heightFraction.coerceAtLeast(0.01f)).background(Color(0xFFD2B48C), RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)).border(1.dp, Color.DarkGray, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
-                    Spacer(modifier = Modifier.height(16.dp))
+            Row(modifier = Modifier.fillMaxSize().padding(start = 48.dp, top = 24.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
+                data.forEach { (_, value) ->
+                    val heightFraction = (value / maxDataValue).coerceIn(0f, 1f)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom, modifier = Modifier.fillMaxHeight()) {
+                        Text(text = if (value == value.toInt().toFloat()) "${value.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", value), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 2.dp))
+                        Box(modifier = Modifier.width(if (isWeekly) 40.dp else 24.dp).fillMaxHeight(heightFraction.coerceAtLeast(0.01f)).background(Color(0xFFD2B48C), RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)).border(1.dp, Color.DarkGray, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
                 }
             }
+            Row(modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(start = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                data.forEach { (date, _) -> Text(text = date, fontSize = 10.sp, color = Color.Black, modifier = Modifier.width(if (isWeekly) 40.dp else 32.dp), textAlign = TextAlign.Center) }
+            }
+            Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp, start = 48.dp).fillMaxWidth().height(1.dp).background(Color.Black))
+            Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 48.dp, bottom = 20.dp).fillMaxHeight().width(1.dp).background(Color.Black))
         }
-        Row(modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(start = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            data.forEach { (date, _) -> Text(text = date, fontSize = 10.sp, color = Color.Black, modifier = Modifier.width(if (isWeekly) 40.dp else 32.dp), textAlign = TextAlign.Center) }
-        }
-        Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp, start = 48.dp).fillMaxWidth().height(1.dp).background(Color.Black))
-        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 48.dp, bottom = 20.dp).fillMaxHeight().width(1.dp).background(Color.Black))
     }
 }

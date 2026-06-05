@@ -1,15 +1,17 @@
 package com.example.healthcare.data
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
@@ -27,7 +29,7 @@ data class PenaltyDetail(
     val currentPenalty: Float
 )
 
-class HealthState {
+class HealthState private constructor(private val context: Context?) {
     var alcoholTarget by mutableFloatStateOf(24f)
     var smokingTarget by mutableFloatStateOf(26f)
     var caffeineTarget by mutableFloatStateOf(30f)
@@ -37,58 +39,128 @@ class HealthState {
     var screenTimeTarget by mutableFloatStateOf(6f)
 
     // 알코올 및 카페인 종류 리스트 (초기 단위 설정)
-    val alcoholTypes = mutableStateListOf<BeverageType>(
-        BeverageType("소주", 1f, "잔"),
-        BeverageType("맥주", 1f, "잔"),
-        BeverageType("와인", 1f, "잔")
+    val alcoholTypes = mutableStateListOf(
+        BeverageType("소주", 6.3f, "잔"),
+        BeverageType("맥주", 7.1f, "잔"),
+        BeverageType("와인", 15.4f, "잔")
     )
-    val caffeineTypes = mutableStateListOf<BeverageType>(
-        BeverageType("아메리카노", 10f, "잔"),
-        BeverageType("에너지 드링크", 50f, "캔"),
-        BeverageType("녹차", 5f, "잔")
+    val caffeineTypes = mutableStateListOf(
+        BeverageType("아메리카노", 150f, "잔"),
+        BeverageType("에너지 드링크", 100f, "캔"),
+        BeverageType("녹차", 30f, "잔")
     )
 
     var selectedAlcoholType by mutableStateOf(alcoholTypes[0])
     var selectedCaffeineType by mutableStateOf(caffeineTypes[0])
 
     private val _records = mutableStateListOf<HealthRecord>()
+    private val prefs: SharedPreferences? = context?.applicationContext?.getSharedPreferences("health_prefs", Context.MODE_PRIVATE)
 
     init {
-        val today = LocalDate.now()
-        val manualTypes = listOf("알코올", "흡연", "카페인")
-        for (i in 0..35) {
-            val date = today.minusDays(i.toLong())
-            manualTypes.forEach { type ->
-                val value = when (type) {
-                    "알코올" -> (0..5).random().toFloat() * 1f // g (기본 함유량 1 기준)
-                    "흡연" -> (0..10).random().toFloat()
-                    "카페인" -> (0..3).random().toFloat() * 10f // mg (아메리카노 10 기준)
-                    else -> 0f
+        if (!loadFromStorage()) {
+            val today = LocalDate.now()
+            val manualTypes = listOf("알코올", "흡연", "카페인")
+            val autoTypes = listOf("수면", "걸음수", "일어서기", "스크린 타임")
+            for (i in 0..35) {
+                val date = today.minusDays(i.toLong())
+                manualTypes.forEach { type ->
+                    val value = when (type) {
+                        "알코올" -> (0..5).random().toFloat() * 1f
+                        "흡연" -> (0..10).random().toFloat()
+                        "카페인" -> (0..3).random().toFloat() * 10f
+                        else -> 0f
+                    }
+                    _records.add(HealthRecord(date, 12, type, value))
                 }
-                // 더미 데이터 초기화
-                _records.add(HealthRecord(date, 12, type, value))
+                autoTypes.forEach { type ->
+                    val value = when (type) {
+                        "수면" -> (4..9).random().toFloat()
+                        "걸음수" -> (2000..12000).random().toFloat()
+                        "일어서기" -> (5..15).random().toFloat()
+                        "스크린 타임" -> (1..10).random().toFloat()
+                        else -> 0f
+                    }
+                    _records.add(HealthRecord(date, null, type, value))
+                }
             }
+            saveToStorage()
+        }
+        loadSelections()
+    }
+
+    private fun getRecordsFile(): java.io.File? = context?.filesDir?.let { java.io.File(it, "health_records.json") }
+
+    private fun saveToStorage() {
+        val jsonArray = JSONArray()
+        _records.forEach { record ->
+            val obj = JSONObject()
+            obj.put("date", record.date.toString())
+            obj.put("hour", record.hour ?: -1)
+            obj.put("type", record.type)
+            obj.put("value", record.value.toDouble())
+            jsonArray.put(obj)
+        }
+        
+        try {
+            getRecordsFile()?.writeText(jsonArray.toString())
+        } catch (_: Exception) { }
+    }
+
+    // 파일 시스템에서 직접 데이터를 읽어와 프로세스 간 캐시 문제를 방지합니다.
+    fun loadFromStorage(): Boolean {
+        val file = getRecordsFile() ?: return false
+        if (!file.exists()) return false
+        
+        val data = try { file.readText() } catch (_: Exception) { return false }
+        if (data.isBlank()) return false
+        
+        try {
+            val jsonArray = JSONArray(data)
+            val newRecords = mutableListOf<HealthRecord>()
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val hourVal = obj.getInt("hour")
+                newRecords.add(HealthRecord(
+                    LocalDate.parse(obj.getString("date")),
+                    if (hourVal == -1) null else hourVal,
+                    obj.getString("type"),
+                    obj.getDouble("value").toFloat()
+                ))
+            }
+
+            _records.clear()
+            _records.addAll(newRecords)
+            return true
+        } catch (_: Exception) {
+            return false
         }
     }
 
     // 자동 연동 데이터 (수면, 걸음수 등)는 기존 값을 지우고 하루 전체의 갱신값으로 덮어씌웁니다.
     fun updateAutoRecord(date: LocalDate, type: String, value: Float) {
+        loadFromStorage() // 최신 데이터 동기화
         _records.removeAll { it.date == date && it.type == type }
         _records.add(HealthRecord(date, null, type, value))
+        saveToStorage()
     }
 
     // 수동 입력 데이터 (알코올, 흡연 등)는 기존 총량과의 차이(Delta)를 구해 특정 시간에 누적합니다.
-    // 섭취량 기록의 특성상 줄이는 것은 허용하지 않습니다.
-    fun updateManualRecord(date: LocalDate, hour: Int, type: String, newValue: Float) {
+    fun updateManualRecord(date: LocalDate, hour: Int?, type: String, newValue: Float) {
+        loadFromStorage() // 최신 데이터 동기화
         val currentTotal = getTodayValue(type)
         val delta = newValue - currentTotal
         if (delta > 0f) {
             _records.add(HealthRecord(date, hour, type, delta))
+            saveToStorage()
         }
     }
 
+    fun getValueForDate(type: String, date: LocalDate): Float {
+        return _records.filter { it.date == date && it.type == type }.sumOf { it.value.toDouble() }.toFloat()
+    }
+
     fun getTodayValue(type: String): Float {
-        return _records.filter { it.date == LocalDate.now() && it.type == type }.sumOf { it.value.toDouble() }.toFloat()
+        return getValueForDate(type, LocalDate.now())
     }
 
     fun getChartData(type: String, period: String): List<Pair<String, Float>> {
@@ -98,7 +170,7 @@ class HealthState {
         return if (period == "단위(일)") {
             (4 downTo 0).map { i ->
                 val date = today.minusDays(i.toLong())
-                val value = _records.filter { it.date == date && it.type == type }.sumOf { it.value.toDouble() }.toFloat()
+                val value = getValueForDate(type, date)
                 Pair(date.format(formatter), value)
             }
         } else {
@@ -108,7 +180,7 @@ class HealthState {
                 for (d in 0..6) {
                     val date = weekStart.plusDays(d.toLong())
                     if (date <= today) {
-                        weeklySum += _records.filter { it.date == date && it.type == type }.sumOf { it.value.toDouble() }.toFloat()
+                        weeklySum += getValueForDate(type, date)
                     }
                 }
                 Pair("${weekStart.format(formatter)}~", weeklySum)
@@ -119,41 +191,36 @@ class HealthState {
     // 걸음수를 제외한 각 건강 지표를 통해 0~100점의 종합 점수를 계산합니다.
     fun getHealthScore(): Int {
         var score = 100f
-        val sleep = getTodayValue("수면")
         val stand = getTodayValue("일어서기")
-        val screen = getTodayValue("스크린 타임")
 
         // 자동 측정 항목 감점 (가중치 적용)
-        val sleepPenalty = if (sleep in 0.1f..sleepTarget) (sleepTarget - sleep) * 5f else 0f
         val standPenalty = if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
-        val screenPenalty = if (screen > screenTimeTarget) (screen - screenTimeTarget) * 3f else 0f
         
-        // 수동 입력 항목 감점 (시간 감쇠가 적용된 현재 총 감점 합계)
+        // 수동 입력 항목 및 수면/스크린 타임 감점
         val alcoholPenalty = getTotalCurrentPenalty("알코올")
         val smokePenalty = getTotalCurrentPenalty("흡연")
         val caffeinePenalty = getTotalCurrentPenalty("카페인")
+        val sleepPenalty = getTotalCurrentPenalty("수면")
+        val screenPenalty = getTotalCurrentPenalty("스크린 타임")
 
-        // score += penalty 인 이유는 getTotalCurrentPenalty가 음수 값을 반환하기 때문입니다.
-        score -= (sleepPenalty + standPenalty + screenPenalty)
-        score += (alcoholPenalty + smokePenalty + caffeinePenalty)
+        // score += penalty 인 이유는 각 Penalty 메서드가 음수(감점) 또는 양수(보너스)를 반환하기 때문입니다.
+        score -= standPenalty
+        score += (alcoholPenalty + smokePenalty + caffeinePenalty + sleepPenalty + screenPenalty)
         
         return Math.round(score).toInt().coerceIn(0, 100)
     }
 
     // 가장 감점이 큰 요소를 찾아 맞춤형 피드백을 제공합니다.
     fun getHealthFeedback(): String {
-        val sleep = getTodayValue("수면")
         val stand = getTodayValue("일어서기")
-        val screen = getTodayValue("스크린 타임")
 
         val penalties = mutableMapOf(
-            "수면" to if (sleep in 0.1f..sleepTarget) (sleepTarget - sleep) * 5f else 0f,
-            "일어서기" to if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f,
-            "스크린 타임" to if (screen > screenTimeTarget) (screen - screenTimeTarget) * 3f else 0f
+            "일어서기" to if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
         )
         
-        listOf("알코올", "흡연", "카페인").forEach { 
-            penalties[it] = -getTotalCurrentPenalty(it)
+        listOf("알코올", "흡연", "카페인", "수면", "스크린 타임").forEach { 
+            val penalty = getTotalCurrentPenalty(it)
+            penalties[it] = if (penalty < 0) -penalty else 0f
         }
 
         val worstFactor = penalties.maxByOrNull { it.value }
@@ -176,18 +243,70 @@ class HealthState {
     // --- 추가된 메서드들 ---
 
     fun saveSelection(type: String, name: String) {
-        // 실제 구현에서는 SharedPreferences 등을 사용할 수 있습니다.
+        prefs?.edit()?.putString("selection_$type", name)?.commit()
     }
 
-    fun loadSelections(context: Context) {
-        // 초기화 시 호출
+    fun loadSelections() {
+        val alcoholName = prefs?.getString("selection_알코올", "소주") ?: "소주"
+        alcoholTypes.find { it.name == alcoholName }?.let { selectedAlcoholType = it }
+        
+        val caffeineName = prefs?.getString("selection_카페인", "아메리카노") ?: "아메리카노"
+        caffeineTypes.find { it.name == caffeineName }?.let { selectedCaffeineType = it }
     }
 
     fun getTotalCurrentPenalty(type: String): Float {
+        if (type == "수면") {
+            val now = LocalDate.now()
+            val s1 = calculateSleepScore(getValueForDate("수면", now))
+            val s2 = calculateSleepScore(getValueForDate("수면", now.minusDays(1)))
+            val s3 = calculateSleepScore(getValueForDate("수면", now.minusDays(2)))
+            return s1 * 0.5f + s2 * 0.3f + s3 * 0.2f
+        }
+        if (type == "스크린 타임") {
+            val screen = getTodayValue("스크린 타임")
+            return if (screen > screenTimeTarget) -(screen - screenTimeTarget) else 0f
+        }
         return getPenaltyDetails(type).sumOf { it.currentPenalty.toDouble() }.toFloat()
     }
 
+    private fun calculateSleepScore(hours: Float): Float {
+        val h = hours.coerceAtMost(7f)
+        return (-10f * Math.pow((h - 7.0), 2.0) + 5f).toFloat()
+    }
+
     fun getPenaltyDetails(type: String): List<PenaltyDetail> {
+        if (type == "수면") {
+            val now = LocalDate.now()
+            // 최근 3일의 수면에 대해서만 가중치가 적용된 실제 반영 점수를 로그로 보여줍니다.
+            val weights = listOf(0.5f, 0.3f, 0.2f)
+            return (0..2).map { i ->
+                val targetDate = now.minusDays(i.toLong())
+                val hours = getValueForDate("수면", targetDate)
+                val baseScore = calculateSleepScore(hours)
+                val weightedPenalty = baseScore * weights[i]
+                
+                PenaltyDetail(
+                    dateTime = targetDate.atTime(0, 0),
+                    originalValue = hours,
+                    isOverThreshold = hours < 7f,
+                    currentPenalty = weightedPenalty
+                )
+            }
+        }
+
+        if (type == "스크린 타임") {
+            val screen = getTodayValue("스크린 타임")
+            val penalty = if (screen > screenTimeTarget) -(screen - screenTimeTarget) else 0f
+            return listOf(
+                PenaltyDetail(
+                    dateTime = LocalDate.now().atTime(0, 0),
+                    originalValue = screen,
+                    isOverThreshold = screen > screenTimeTarget,
+                    currentPenalty = penalty
+                )
+            )
+        }
+
         val now = LocalDateTime.now()
         val sevenDaysAgo = now.minusDays(7)
         val manualRecords = _records.filter { it.type == type && it.hour != null && it.value > 0f }
@@ -266,10 +385,10 @@ class HealthState {
         private var instance: HealthState? = null
 
         fun getInstance(context: Context? = null): HealthState {
+            val ctx = context?.applicationContext
             return instance ?: synchronized(this) {
-                instance ?: HealthState().also { 
+                instance ?: HealthState(ctx).also { 
                     instance = it 
-                    context?.let { ctx -> it.loadSelections(ctx) }
                 }
             }
         }

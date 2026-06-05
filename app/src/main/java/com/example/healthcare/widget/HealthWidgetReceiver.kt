@@ -13,3 +13,7 @@ class SmokingWidgetReceiver : GlanceAppWidgetReceiver() {
 class CaffeineWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = CaffeineWidget()
 }
+
+class SpectrumWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget = SpectrumWidget()
+}

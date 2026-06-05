@@ -27,18 +27,122 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import android.content.Intent
+import androidx.glance.appwidget.LinearProgressIndicator
+import androidx.glance.layout.Box
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
+import androidx.glance.layout.size
+import androidx.glance.appwidget.action.actionStartActivity
+import com.example.healthcare.MainActivity
 import com.example.healthcare.data.HealthState
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.Locale
 
 class AlcoholWidget : HealthWidget("알코올")
 class SmokingWidget : HealthWidget("흡연")
 class CaffeineWidget : HealthWidget("카페인")
 
+class SpectrumWidget : GlanceAppWidget() {
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val healthState = HealthState.getInstance(context)
+        healthState.loadFromStorage() // 렌더링 전 최신 데이터 강제 로드
+        val score = healthState.getHealthScore()
+        val feedback = healthState.getHealthFeedback()
+        val emoji = when {
+            score >= 80 -> "😏"
+            score >= 50 -> "😐"
+            else -> "😫"
+        }
+
+        provideContent {
+            Box(modifier = GlanceModifier.fillMaxSize().background(Color.White)) {
+                Row(
+                    modifier = GlanceModifier
+                        .fillMaxSize()
+                        .padding(12.dp)
+                        .clickable(actionStartActivity(Intent(context, MainActivity::class.java))),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 이모지 영역
+                    Box(
+                        modifier = GlanceModifier
+                            .size(48.dp)
+                            .background(Color.White)
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = emoji, style = TextStyle(fontSize = 32.sp))
+                    }
+                    
+                    Spacer(modifier = GlanceModifier.width(12.dp))
+                    
+                    // 점수 및 피드백 영역
+                    Column(modifier = GlanceModifier.defaultWeight()) {
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                            modifier = GlanceModifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "$score",
+                                style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp)
+                            )
+                            Spacer(modifier = GlanceModifier.width(8.dp))
+                            
+                            // 프로그레스 바
+                            LinearProgressIndicator(
+                                progress = score / 100f,
+                                modifier = GlanceModifier.defaultWeight().height(8.dp),
+                                color = ColorProvider(Color.Blue, Color.Blue),
+                                backgroundColor = ColorProvider(Color.LightGray, Color.LightGray)
+                            )
+                            
+                            Spacer(modifier = GlanceModifier.width(8.dp))
+                            Text(text = "100", style = TextStyle(fontSize = 10.sp))
+                        }
+                        Spacer(modifier = GlanceModifier.height(4.dp))
+                        Text(
+                            text = feedback,
+                            style = TextStyle(fontSize = 11.sp),
+                            maxLines = 2
+                        )
+                    }
+                }
+
+                // 우측 상단 새로고침 버튼
+                Box(
+                    modifier = GlanceModifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopEnd
+                ) {
+                    Box(
+                        modifier = GlanceModifier
+                            .size(32.dp)
+                            .padding(4.dp)
+                            .clickable(actionRunCallback<RefreshAction>()),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "🔄", style = TextStyle(fontSize = 14.sp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+class RefreshAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val healthState = HealthState.getInstance(context)
+        healthState.loadFromStorage()
+        HealthWidget.updateAllWidgets(context)
+    }
+}
+
 open class HealthWidget(val type: String) : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val healthState = HealthState.getInstance()
+        val healthState = HealthState.getInstance(context)
+        healthState.loadFromStorage() // 렌더링 전 최신 데이터 강제 로드
         val emoji = when (type) {
             "알코올" -> "🍺"
             "흡연" -> "🚬"
@@ -118,6 +222,7 @@ open class HealthWidget(val type: String) : GlanceAppWidget() {
             manager.getGlanceIds(AlcoholWidget::class.java).forEach { AlcoholWidget().update(context, it) }
             manager.getGlanceIds(SmokingWidget::class.java).forEach { SmokingWidget().update(context, it) }
             manager.getGlanceIds(CaffeineWidget::class.java).forEach { CaffeineWidget().update(context, it) }
+            manager.getGlanceIds(SpectrumWidget::class.java).forEach { SpectrumWidget().update(context, it) }
         }
     }
 }
@@ -129,8 +234,7 @@ class IncrementAction : ActionCallback {
         parameters: ActionParameters
     ) {
         val type = parameters[HealthWidget.typeKey] ?: return
-        val healthState = HealthState.getInstance()
-        val currentValue = healthState.getTodayValue(type)
+        val healthState = HealthState.getInstance(context)
         
         val incrementAmount = when (type) {
             "알코올" -> healthState.selectedAlcoholType.content
@@ -138,9 +242,17 @@ class IncrementAction : ActionCallback {
             else -> 1f
         }
         
-        healthState.updateRecord(LocalDate.now(), type, currentValue + incrementAmount)
+        val manualTypes = listOf("알코올", "흡연", "카페인")
+        if (type in manualTypes) {
+            val currentValue = healthState.getTodayValue(type)
+            healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, type, currentValue + incrementAmount)
+        } else {
+            val currentValue = healthState.getTodayValue(type)
+            healthState.updateAutoRecord(LocalDate.now(), type, currentValue + incrementAmount)
+        }
         
-        // 모든 위젯을 갱신합니다.
+        // 데이터가 파일에 완전히 기록될 시간을 벌기 위해 아주 짧은 지연 후 갱신을 시도합니다.
+        kotlinx.coroutines.delay(100)
         HealthWidget.updateAllWidgets(context)
     }
 }

@@ -114,6 +114,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         rawAbsoluteValue
     }
     val isManualInput = itemName in listOf("알코올", "흡연", "카페인")
+    val hasPenaltyDetails = itemName in listOf("알코올", "흡연", "카페인", "수면", "스크린 타임")
 
     var tempDisplayValue by remember(displayCurrentValue, selectedUnit) { mutableFloatStateOf(displayCurrentValue) }
     val hasSliderChanges = tempDisplayValue > displayCurrentValue + 0.001f
@@ -351,7 +352,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             Spacer(modifier = Modifier.height(16.dp))
 
             // 3. 감점 총합 요약 표시 (최상단)
-            if (isManualInput) {
+            if (hasPenaltyDetails) {
                 val totalPenalty = healthState.getTotalCurrentPenalty(itemName)
                 Surface(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
@@ -363,7 +364,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         modifier = Modifier.padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(text = "현재 적용 중인 총 감점", fontSize = 14.sp, color = Color.Gray)
+                        Text(text = if (itemName == "수면") "현재 수면 건강 점수 영향" else "현재 적용 중인 총 감점", fontSize = 14.sp, color = Color.Gray)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = String.format("%.2f점", totalPenalty),
@@ -373,7 +374,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         )
                         if (totalPenalty < 0) {
                             Text(
-                                text = "시간이 지나면 점수가 서서히 회복됩니다.",
+                                text = if (itemName == "수면") "꾸준히 충분한 수면을 취하면 점수가 회복됩니다." else "시간이 지나면 점수가 서서히 회복됩니다.",
                                 fontSize = 12.sp,
                                 color = Color(0xFFD32F2F).copy(alpha = 0.7f),
                                 modifier = Modifier.padding(top = 4.dp)
@@ -441,7 +442,6 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         onClick = { 
                             val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
                             healthState.updateManualRecord(LocalDate.now(), LocalTime.now().hour, itemName, tempDisplayValue * displayToInternalMultiplier) 
-                            updateWidgets()
                             updateWidgets()
                         },
                         modifier = Modifier.align(Alignment.End).padding(bottom = 8.dp)
@@ -526,13 +526,18 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            CustomBarChart(data = chartData, isWeekly = selectedPeriod == "기간(주)", modifier = Modifier.fillMaxWidth().height(250.dp))
+            CustomBarChart(
+                data = chartData,
+                isWeekly = selectedPeriod == "기간(주)",
+                modifier = Modifier.fillMaxWidth().height(250.dp),
+                yAxisTitle = displayUnit
+            )
             
-            // 시점별 감점 상세 내역 추가 (흡연, 알코올, 카페인만 해당)
-            if (isManualInput) {
+            // 시점별 감점 상세 내역 추가 (흡연, 알코올, 카페인, 수면 해당)
+            if (hasPenaltyDetails) {
                 Spacer(modifier = Modifier.height(32.dp))
                 Text(
-                    text = "시점별 감점 상세 내역 (최근 7일)",
+                    text = if (itemName == "수면") "일자별 수면 점수 내역 (최근 7일)" else "시점별 감점 상세 내역 (최근 7일)",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -552,24 +557,34 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column {
-                                        // 1. 시점 정확히 반영 (MM/dd H시 형식)
+                                        // 1. 시점 정확히 반영 (MM/dd H시 형식, 수면은 날짜만)
+                                        val timePattern = if (itemName == "수면") "MM/dd" else "MM/dd H시"
                                         Text(
-                                            text = detail.dateTime.format(DateTimeFormatter.ofPattern("MM/dd H시")),
+                                            text = detail.dateTime.format(DateTimeFormatter.ofPattern(timePattern)),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                         val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
+                                        val formattedValue = if (itemName == "수면" || itemName == "스크린 타임") String.format("%.1f", detail.originalValue) else "${detail.originalValue.toInt()}"
+                                        val penaltyLabel = if (detail.isOverThreshold) {
+                                            when (itemName) {
+                                                "수면" -> " (수면 부족 💤)"
+                                                "스크린 타임" -> ""
+                                                else -> " (폭주 페널티 🔥)"
+                                            }
+                                        } else ""
+                                        
                                         Text(
-                                            text = "입력: ${detail.originalValue.toInt()}$unitInDetail${if (detail.isOverThreshold) " (폭주 페널티 🔥)" else ""}",
+                                            text = "기록: $formattedValue$unitInDetail$penaltyLabel",
                                             fontSize = 12.sp,
-                                            color = if (detail.isOverThreshold) Color(0xFFD32F2F) else Color.Gray
+                                            color = if (detail.isOverThreshold && itemName != "수면") Color(0xFFD32F2F) else Color.Gray
                                         )
                                     }
                                     Text(
                                         text = String.format("%.2f점", detail.currentPenalty),
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (detail.currentPenalty < 0) Color(0xFFE53935) else Color.Black
+                                        color = if (detail.currentPenalty < 0) Color(0xFFE53935) else if (detail.currentPenalty > 0) Color(0xFF2E7D32) else Color.Black
                                     )
                                 }
                                 HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
@@ -577,7 +592,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         }
                     }
                     Text(
-                        text = "* 시간이 지남에 따라 감점 수치는 서서히 감소합니다.",
+                        text = if (itemName == "수면") "* 최근 3일간의 수면 습관이 오늘 점수에 반영됩니다." else "* 시간이 지남에 따라 감점 수치는 서서히 감소합니다.",
                         fontSize = 11.sp,
                         color = Color.Gray,
                         modifier = Modifier.padding(top = 4.dp).fillMaxWidth()
