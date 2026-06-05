@@ -378,7 +378,13 @@ fun MemberDetailDialog(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column {
-                                        Text(factor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        val categoryEmoji = when(factor) {
+                                            "알코올" -> "🍺 "
+                                            "카페인" -> "☕ "
+                                            "흡연" -> "🚬 "
+                                            else -> ""
+                                        }
+                                        Text(text = "$categoryEmoji$factor", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                         
                                         val unitLabel = when(factor) {
                                             "알코올" -> "g"
