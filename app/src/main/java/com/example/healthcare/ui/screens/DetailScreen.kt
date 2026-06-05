@@ -329,9 +329,11 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
                         val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
                         if (isManualInput) {
+                            val now = LocalTime.now()
                             healthState.updateManualRecord(
                                 LocalDate.now(), 
-                                LocalTime.now().hour, 
+                                now.hour,
+                                now.minute,
                                 itemName, 
                                 finalDisplayValue * displayToInternalMultiplier,
                                 if (isConvertible) selectedType.name else if (itemName == "흡연") "담배" else null,
@@ -456,9 +458,11 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     Button(
                         onClick = { 
                             val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
+                            val now = LocalTime.now()
                             healthState.updateManualRecord(
                                 LocalDate.now(), 
-                                LocalTime.now().hour, 
+                                now.hour,
+                                now.minute,
                                 itemName, 
                                 tempDisplayValue * displayToInternalMultiplier,
                                 if (isConvertible) selectedType.name else if (itemName == "흡연") "담배" else null,
@@ -576,7 +580,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 )
                 
-                val penaltyDetails = healthState.getPenaltyDetails(itemName)
+                val penaltyDetails = healthState.getPenaltyDetails(itemName).reversed()
                 
                 // key(healthState.activityTarget)를 사용하여 Recomposition 유도
                 key(if (itemName == "활동시간") healthState.activityTarget else 0f) {
@@ -592,10 +596,10 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column {
-                                            // 1. 시점 정확히 반영 (MM/dd H시 형식, 수면은 날짜만)
-                                            val timePattern = if (itemName == "수면") "MM/dd" else "MM/dd H시"
+                                            // 1. 시점 정확히 반영 (MM/dd H:mm 형식, 수면은 날짜만)
+                                            val timePattern = if (itemName == "수면") "MM/dd" else if (detail.minute != null) "MM/dd HH:mm" else "MM/dd HH:00"
                                             Text(
-                                                text = detail.dateTime.format(DateTimeFormatter.ofPattern(timePattern)),
+                                                text = detail.dateTime.withMinute(detail.minute ?: 0).format(DateTimeFormatter.ofPattern(timePattern)),
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.Bold
                                             )

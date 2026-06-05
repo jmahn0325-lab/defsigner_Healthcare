@@ -364,7 +364,7 @@ fun MemberDetailDialog(
                             ) {
                                 Column {
                                     Text(factor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                    Text("오늘 점수: ${score.toInt()}점", fontSize = 12.sp, color = Color.Gray)
+                                    Text("현재 상태: ${score.toInt()}점", fontSize = 12.sp, color = Color.Gray)
                                 }
                                 if (member.uid != myUid) {
                                     IconButton(onClick = {
@@ -384,7 +384,7 @@ fun MemberDetailDialog(
                                 }
                             }
                             
-                            // 상세 로그 표시
+                            // 상세 로그 표시 (최근 7일 통합)
                             if (logs.isNotEmpty()) {
                                 Surface(
                                     color = Color(0xFFF5F5F5),
@@ -392,13 +392,16 @@ fun MemberDetailDialog(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp)) {
-                                        logs.forEach { log ->
+                                        logs.take(15).forEach { log -> // 너무 많으면 상위 15개만
                                             Text(
                                                 text = "• $log",
                                                 fontSize = 12.sp,
                                                 color = Color.DarkGray,
                                                 modifier = Modifier.padding(vertical = 2.dp)
                                             )
+                                        }
+                                        if (logs.size > 15) {
+                                            Text("...", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(start = 8.dp))
                                         }
                                     }
                                 }

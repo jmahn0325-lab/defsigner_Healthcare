@@ -187,11 +187,11 @@ class SocialRepository {
                 PrivacySettings()
             }
 
-            // 2. 가장 최근의 일일 로그 1개 가져오기
+            // 2. 최근 7일간의 일일 로그 가져오기
             val logsQuery = db.collection("Users").document(memberUid)
                 .collection("DailyLogs")
                 .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(1)
+                .limit(7)
                 .get()
                 .await()
 
@@ -199,66 +199,67 @@ class SocialRepository {
                 return MemberDetails(memberUid, displayName, emptyMap())
             }
 
-            val logDoc = logsQuery.documents[0]
-            val rawScores = logDoc.get("scores") as? Map<String, Double> ?: emptyMap()
-            
-            // 3. 프라이버시 설정에 따른 필터링 분기 처리
-            val filteredScores = mutableMapOf<String, Float>()
-            val detailedLogs = mutableMapOf<String, List<String>>()
+            // 3. 점수 합산 및 로그 통합
+            val totalScores = mutableMapOf<String, Float>()
+            val detailedLogs = mutableMapOf<String, MutableList<String>>()
 
-            rawScores.forEach { (factor, score) ->
-                val isVisible = when (factor) {
-                    "알코올" -> privacy.alcoholVisible
-                    "카페인" -> privacy.caffeineVisible
-                    "흡연" -> privacy.smokingVisible
-                    else -> privacy.healthVisible // 수면, 활동량 등
-                }
-                if (isVisible) {
-                    filteredScores[factor] = score.toFloat()
-                }
+            // 최신 로그(첫 번째 문서)에서 현재 점수를 가져옴 (리더보드와 일관성)
+            val latestDoc = logsQuery.documents[0]
+            val latestScores = latestDoc.get("scores") as? Map<String, Double> ?: emptyMap()
+            latestScores.forEach { (factor, score) ->
+                totalScores[factor] = score.toFloat()
             }
 
-            // 추가: DailyLogs 문서에서 records 리스트 (있을 경우) 파싱
-            val rawRecords = logDoc.get("records") as? List<Map<String, Any>>
-            rawRecords?.forEach { recordMap ->
-                val type = recordMap["type"] as? String ?: return@forEach
-                val isVisible = when (type) {
-                    "알코올" -> privacy.alcoholVisible
-                    "카페인" -> privacy.caffeineVisible
-                    "흡연" -> privacy.smokingVisible
-                    else -> privacy.healthVisible
-                }
-                
-                if (isVisible) {
-                    val itemName = recordMap["itemName"] as? String
-                    val unit = recordMap["unit"] as? String
-                    val value = (recordMap["value"] as? Number)?.toFloat() ?: 0f
+            // 7일간의 모든 로그 문서를 순회하며 레코드 수집
+            logsQuery.documents.forEach { logDoc ->
+                val rawRecords = logDoc.get("records") as? List<Map<String, Any>> ?: return@forEach
+                rawRecords.forEach { recordMap ->
+                    val type = recordMap["type"] as? String ?: return@forEach
+                    val isVisible = when (type) {
+                        "알코올" -> privacy.alcoholVisible
+                        "카페인" -> privacy.caffeineVisible
+                        "흡연" -> privacy.smokingVisible
+                        else -> privacy.healthVisible
+                    }
                     
-                    if (itemName != null && unit != null) {
-                        val contentUnit = if (type == "알코올") "g" else if (type == "카페인") "mg" else "개비"
+                    if (isVisible) {
+                        val itemName = recordMap["itemName"] as? String
+                        val unit = recordMap["unit"] as? String
+                        val value = (recordMap["value"] as? Number)?.toFloat() ?: 0f
                         
-                        // 간단한 추론 로직 (소주 6.3g, 맥주 7.1g, 아메리카노 150mg 등 기본값 활용)
-                        val ratio = when(itemName) {
-                            "소주" -> 6.3f
-                            "맥주" -> 7.1f
-                            "와인" -> 15.4f
-                            "아메리카노" -> 150f
-                            "에너지 드링크" -> 100f
-                            "녹차" -> 30f
-                            else -> 1f
+                        if (itemName != null && unit != null) {
+                            val emoji = when(type) {
+                                "알코올" -> "🍺"
+                                "카페인" -> "☕"
+                                "흡연" -> "🚬"
+                                else -> "📝"
+                            }
+                            val contentUnit = if (type == "알코올") "g" else if (type == "카페인") "mg" else "개비"
+                            
+                            // 비율 추론 (기존 로직 유지)
+                            val ratio = when(itemName) {
+                                "소주" -> 6.3f
+                                "맥주" -> 7.1f
+                                "와인" -> 15.4f
+                                "아메리카노" -> 150f
+                                "에너지 드링크" -> 100f
+                                "녹차" -> 30f
+                                else -> 1f
+                            }
+                            val count = value / ratio
+                            val countStr = if (count % 1f == 0f) "${count.toInt()}" else String.format(Locale.getDefault(), "%.1f", count)
+                            val logString = "$emoji $itemName ${countStr}$unit / ${value.toInt()}$contentUnit"
+                            
+                            val list = detailedLogs.getOrPut(type) { mutableListOf() }
+                            list.add(logString)
                         }
-                        val count = value / ratio
-                        val countStr = if (count % 1f == 0f) "${count.toInt()}" else String.format(Locale.getDefault(), "%.1f", count)
-                        val logString = "$itemName ${countStr}$unit / ${value.toInt()}$contentUnit"
-                        
-                        val list = detailedLogs.getOrDefault(type, mutableListOf()).toMutableList()
-                        list.add(logString)
-                        detailedLogs[type] = list
                     }
                 }
             }
 
-            MemberDetails(memberUid, displayName, filteredScores, detailedLogs)
+            // 이미 정렬된 logsQuery(DESCENDING)를 순회했으므로 리스트 내의 순서는 최신이 앞임.
+            // (만약 한 날짜 내에서 여러 기록이 있다면 입력 순서에 따름)
+            MemberDetails(memberUid, displayName, totalScores, detailedLogs)
         } catch (e: Exception) {
             Log.e("SocialRepository", "Error fetching member details", e)
             null
