@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -33,7 +35,24 @@ fun TopSpectrumBanner(score: Int = 70, message: String = "수면은 충분하지
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(text = "$score", fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(8.dp))
-                    LinearProgressIndicator(progress = { score / 100f }, modifier = Modifier.weight(1f).height(12.dp).padding(bottom = 6.dp), color = Color.Blue)
+                    // 그라데이션 히트바 구현
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(12.dp)
+                            .padding(bottom = 6.dp)
+                            .background(Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                    ) {
+                        val gradientBrush = Brush.horizontalGradient(
+                            colors = listOf(Color.Red, Color.Yellow, Color.Green)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(score / 100f)
+                                .fillMaxHeight()
+                                .background(gradientBrush, RoundedCornerShape(6.dp))
+                        )
+                    }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "100", fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
                 }

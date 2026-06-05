@@ -90,12 +90,18 @@ class SpectrumWidget : GlanceAppWidget() {
                             )
                             Spacer(modifier = GlanceModifier.width(8.dp))
                             
-                            // 프로그레스 바
+                            // 위젯용 히트바 (점수 구간별 색상 변경)
+                            val barColor = when {
+                                score >= 80 -> Color(0xFF4CAF50) // 녹색
+                                score >= 50 -> Color(0xFFFFEB3B) // 노란색
+                                else -> Color(0xFFF44336) // 빨간색
+                            }
+                            
                             LinearProgressIndicator(
                                 progress = score / 100f,
                                 modifier = GlanceModifier.defaultWeight().height(8.dp),
-                                color = ColorProvider(Color.Blue, Color.Blue),
-                                backgroundColor = ColorProvider(Color.LightGray, Color.LightGray)
+                                color = ColorProvider(barColor, barColor),
+                                backgroundColor = ColorProvider(Color.LightGray.copy(alpha = 0.3f), Color.LightGray.copy(alpha = 0.3f))
                             )
                             
                             Spacer(modifier = GlanceModifier.width(8.dp))
