@@ -22,11 +22,12 @@ import java.time.temporal.ChronoUnit
 data class HealthRecord(
     val date: LocalDate,
     val hour: Int?,
-    val minute: Int? = null, // 추가: 분 (0~59)
+    val minute: Int? = null,
+    val second: Int? = null, // 추가: 초 (0~59)
     val type: String,
     val value: Float,
-    val itemName: String? = null, // 추가: 제품명 (예: 아메리카노)
-    val unit: String? = null      // 추가: 단위 (예: 잔)
+    val itemName: String? = null,
+    val unit: String? = null
 )
 
 // 제품 종류 정보를 저장하는 데이터 클래스 (단위 unit 추가)
@@ -100,6 +101,7 @@ class HealthState private constructor(private val context: Context?) {
             obj.put("date", record.date.toString())
             obj.put("hour", record.hour ?: -1)
             obj.put("minute", record.minute ?: -1)
+            obj.put("second", record.second ?: -1)
             obj.put("type", record.type)
             obj.put("value", record.value.toDouble())
             record.itemName?.let { obj.put("itemName", it) }
@@ -127,10 +129,12 @@ class HealthState private constructor(private val context: Context?) {
                 val obj = jsonArray.getJSONObject(i)
                 val hourVal = obj.getInt("hour")
                 val minuteVal = obj.optInt("minute", -1)
+                val secondVal = obj.optInt("second", -1)
                 newRecords.add(HealthRecord(
                     date = LocalDate.parse(obj.getString("date")),
                     hour = if (hourVal == -1) null else hourVal,
                     minute = if (minuteVal == -1) null else minuteVal,
+                    second = if (secondVal == -1) null else secondVal,
                     type = obj.getString("type"),
                     value = obj.getDouble("value").toFloat(),
                     itemName = obj.optString("itemName").let { if (it.isEmpty()) null else it },
@@ -150,17 +154,17 @@ class HealthState private constructor(private val context: Context?) {
     fun updateAutoRecord(date: LocalDate, type: String, value: Float) {
         loadFromStorage() // 최신 데이터 동기화
         _records.removeAll { it.date == date && it.type == type }
-        _records.add(HealthRecord(date, null, null, type, value))
+        _records.add(HealthRecord(date, null, null, null, type, value))
         saveToStorage()
     }
 
     // 수동 입력 데이터 (알코올, 흡연 등)는 기존 총량과의 차이(Delta)를 구해 특정 시간에 누적합니다.
-    fun updateManualRecord(date: LocalDate, hour: Int?, minute: Int?, type: String, newValue: Float, itemName: String? = null, unit: String? = null) {
+    fun updateManualRecord(date: LocalDate, hour: Int?, minute: Int?, second: Int?, type: String, newValue: Float, itemName: String? = null, unit: String? = null) {
         loadFromStorage() // 최신 데이터 동기화
         val currentTotal = getTodayValue(type)
         val delta = newValue - currentTotal
         if (delta > 0f) {
-            _records.add(HealthRecord(date, hour, minute, type, delta, itemName, unit))
+            _records.add(HealthRecord(date, hour, minute, second, type, delta, itemName, unit))
             saveToStorage()
         }
     }

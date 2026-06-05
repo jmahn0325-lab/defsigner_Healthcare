@@ -250,6 +250,7 @@ class IncrementAction : ActionCallback {
                 LocalDate.now(), 
                 now.hour, 
                 now.minute, 
+                now.second,
                 type, 
                 currentValue + incrementAmount,
                 if (type == "알코올") healthState.selectedAlcoholType.name else if (type == "카페인") healthState.selectedCaffeineType.name else if (type == "흡연") "담배" else null,

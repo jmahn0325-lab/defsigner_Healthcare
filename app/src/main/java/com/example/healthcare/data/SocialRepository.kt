@@ -235,9 +235,10 @@ class SocialRepository {
                 val recordDateStr = recordMap["date"] as? String ?: ""
                 val hour = (recordMap["hour"] as? Number)?.toInt() ?: 0
                 val minute = (recordMap["minute"] as? Number)?.toInt() ?: 0
+                val second = (recordMap["second"] as? Number)?.toInt() ?: 0
                 
                 val recordDateTime = try {
-                    java.time.LocalDate.parse(recordDateStr).atTime(hour, minute)
+                    java.time.LocalDate.parse(recordDateStr).atTime(hour, minute, second)
                 } catch (e: Exception) { null }
 
                 val isVisible = when (type) {
@@ -303,7 +304,7 @@ class SocialRepository {
                         
                         // 로그 문자열 앞에 시간 정보를 포함하여 정렬 가능하게 함 (표시할 때는 그대로 사용)
                         // 하지만 이미 allRawRecords가 정렬되어 있지 않으므로 수집 후 정렬이 필요함
-                        val sortKey = "${recordDateStr}_${String.format("%02d:%02d", hour, minute)}"
+                        val sortKey = "${recordDateStr}_${String.format(Locale.getDefault(), "%02d:%02d:%02d", hour, minute, second)}"
                         
                         val list = detailedLogs.getOrPut(type) { mutableListOf() }
                         // 정렬을 위해 Pair로 저장하거나 나중에 정렬
@@ -384,6 +385,7 @@ class SocialRepository {
                         "unit" to record.unit,
                         "hour" to record.hour,
                         "minute" to record.minute,
+                        "second" to record.second,
                         "date" to record.date.toString()
                     )
                 }
