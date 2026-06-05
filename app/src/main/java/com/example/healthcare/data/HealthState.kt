@@ -30,6 +30,11 @@ data class PenaltyDetail(
 )
 
 class HealthState private constructor(private val context: Context?) {
+    var gender by mutableStateOf("Male")
+    var isSmoker by mutableStateOf(true)
+    var isDrinker by mutableStateOf(true)
+    var isOnboardingCompleted by mutableStateOf(false)
+
     var alcoholTarget by mutableFloatStateOf(24f)
     var smokingTarget by mutableFloatStateOf(26f)
     var caffeineTarget by mutableFloatStateOf(30f)
@@ -197,8 +202,8 @@ class HealthState private constructor(private val context: Context?) {
         val standPenalty = if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
         
         // 수동 입력 항목 및 수면/스크린 타임 감점
-        val alcoholPenalty = getTotalCurrentPenalty("알코올")
-        val smokePenalty = getTotalCurrentPenalty("흡연")
+        val alcoholPenalty = if (isDrinker) getTotalCurrentPenalty("알코올") else 0f
+        val smokePenalty = if (isSmoker) getTotalCurrentPenalty("흡연") else 0f
         val caffeinePenalty = getTotalCurrentPenalty("카페인")
         val sleepPenalty = getTotalCurrentPenalty("수면")
         val screenPenalty = getTotalCurrentPenalty("스크린 타임")
@@ -218,7 +223,11 @@ class HealthState private constructor(private val context: Context?) {
             "일어서기" to if (stand in 0.1f..standTarget) (standTarget - stand) * 2f else 0f
         )
         
-        listOf("알코올", "흡연", "카페인", "수면", "스크린 타임").forEach { 
+        val checkTypes = mutableListOf("카페인", "수면", "스크린 타임")
+        if (isDrinker) checkTypes.add("알코올")
+        if (isSmoker) checkTypes.add("흡연")
+
+        checkTypes.forEach { 
             val penalty = getTotalCurrentPenalty(it)
             penalties[it] = if (penalty < 0) -penalty else 0f
         }
@@ -246,12 +255,27 @@ class HealthState private constructor(private val context: Context?) {
         prefs?.edit()?.putString("selection_$type", name)?.commit()
     }
 
+    fun saveProfile() {
+        prefs?.edit()?.apply {
+            putString("gender", gender)
+            putBoolean("isSmoker", isSmoker)
+            putBoolean("isDrinker", isDrinker)
+            putBoolean("isOnboardingCompleted", isOnboardingCompleted)
+            commit()
+        }
+    }
+
     fun loadSelections() {
         val alcoholName = prefs?.getString("selection_알코올", "소주") ?: "소주"
         alcoholTypes.find { it.name == alcoholName }?.let { selectedAlcoholType = it }
         
         val caffeineName = prefs?.getString("selection_카페인", "아메리카노") ?: "아메리카노"
         caffeineTypes.find { it.name == caffeineName }?.let { selectedCaffeineType = it }
+
+        gender = prefs?.getString("gender", "Male") ?: "Male"
+        isSmoker = prefs?.getBoolean("isSmoker", true) ?: true
+        isDrinker = prefs?.getBoolean("isDrinker", true) ?: true
+        isOnboardingCompleted = prefs?.getBoolean("isOnboardingCompleted", false) ?: false
     }
 
     fun getTotalCurrentPenalty(type: String): Float {
@@ -325,9 +349,9 @@ class HealthState private constructor(private val context: Context?) {
             }
             
             val threshold = when (type) {
-                "알코올" -> 40f  // 40g
-                "카페인" -> 400f // 400mg
-                "흡연" -> 13f    // 13개비 (요청사항 반영)
+                "알코올" -> if (gender == "Female") 20f else 40f
+                "카페인" -> if (gender == "Female") 300f else 400f
+                "흡연" -> if (gender == "Female") 7f else 13f
                 else -> 1000f
             }
 

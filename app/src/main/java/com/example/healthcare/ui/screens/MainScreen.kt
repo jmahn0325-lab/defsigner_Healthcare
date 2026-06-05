@@ -155,27 +155,38 @@ fun MainHealthSpectrumScreen(healthState: HealthState, onNavigateToDetail: (Stri
                 onClick = { onNavigateToDetail("종합 점수") }
             )
 
-            Text(
-                text = "직접 기록",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val alcoholCups = healthState.getTodayValue("알코올") / healthState.selectedAlcoholType.content
-                    HealthInputSlider("🍶", "알코올", healthState.selectedAlcoholType.unit, value = alcoholCups, maxValue = healthState.alcoholTarget,
-                        onClick = { onNavigateToDetail("알코올") })
-                }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val caffeineCups = healthState.getTodayValue("카페인") / healthState.selectedCaffeineType.content
-                    HealthInputSlider("☕", "카페인", healthState.selectedCaffeineType.unit, value = caffeineCups, maxValue = healthState.caffeineTarget,
-                        onClick = { onNavigateToDetail("카페인") })
-                }
+            if (healthState.isDrinker || healthState.isSmoker) {
+                Text(
+                    text = "직접 기록",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
-            HealthInputSlider("🚬", "흡연", "개비", value = healthState.getTodayValue("흡연"), maxValue = healthState.smokingTarget,
-                onClick = { onNavigateToDetail("흡연") })
+
+            if (healthState.isDrinker) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val alcoholCups = healthState.getTodayValue("알코올") / healthState.selectedAlcoholType.content
+                        HealthInputSlider("🍶", "알코올", healthState.selectedAlcoholType.unit, value = alcoholCups, maxValue = healthState.alcoholTarget,
+                            onClick = { onNavigateToDetail("알코올") })
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val caffeineCups = healthState.getTodayValue("카페인") / healthState.selectedCaffeineType.content
+                        HealthInputSlider("☕", "카페인", healthState.selectedCaffeineType.unit, value = caffeineCups, maxValue = healthState.caffeineTarget,
+                            onClick = { onNavigateToDetail("카페인") })
+                    }
+                }
+            } else {
+                // 음주를 안해도 카페인은 보여줘야 하므로 (기존 Row에서 카페인만 추출)
+                HealthInputSlider("☕", "카페인", healthState.selectedCaffeineType.unit, value = healthState.getTodayValue("카페인") / healthState.selectedCaffeineType.content, maxValue = healthState.caffeineTarget,
+                    onClick = { onNavigateToDetail("카페인") })
+            }
+
+            if (healthState.isSmoker) {
+                HealthInputSlider("🚬", "흡연", "개비", value = healthState.getTodayValue("흡연"), maxValue = healthState.smokingTarget,
+                    onClick = { onNavigateToDetail("흡연") })
+            }
 
             Text(
                 text = "자동 측정 데이터",

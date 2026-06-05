@@ -15,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.healthcare.data.HealthState
 import com.example.healthcare.ui.screens.DetailScreen
 import com.example.healthcare.ui.screens.MainHealthSpectrumScreen
+import com.example.healthcare.ui.screens.OnboardingScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,7 +40,19 @@ fun HealthApp() {
     // 싱글톤 인스턴스를 가져오고 초기화합니다.
     val healthState = remember { HealthState.getInstance(context) }
 
-    NavHost(navController = navController, startDestination = "main") {
+    val startDestination = if (healthState.isOnboardingCompleted) "main" else "onboarding"
+
+    NavHost(navController = navController, startDestination = startDestination) {
+        composable("onboarding") {
+            OnboardingScreen(
+                healthState = healthState,
+                onComplete = {
+                    navController.navigate("main") {
+                        popUpTo("onboarding") { inclusive = true }
+                    }
+                }
+            )
+        }
         composable("main") {
             MainHealthSpectrumScreen(
                 healthState = healthState,
