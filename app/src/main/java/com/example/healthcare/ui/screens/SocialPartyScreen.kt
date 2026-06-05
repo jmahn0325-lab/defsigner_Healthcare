@@ -311,12 +311,15 @@ fun LeaderboardItem(rank: Int, member: UserScore, isMe: Boolean, onClick: () -> 
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = member.displayName, fontWeight = FontWeight.Bold)
+                if (member.bio.isNotBlank()) {
+                    Text(text = member.bio, fontSize = 11.sp, color = Color.Gray)
+                }
                 if (isMe) Text("(나)", fontSize = 10.sp, color = Color.Gray)
             }
             Text(
-                text = "${member.totalScore}점",
+                text = if (member.isPublic || isMe) "${member.totalScore}점" else "비공개",
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.secondary
+                color = if (member.isPublic || isMe) MaterialTheme.colorScheme.secondary else Color.Gray
             )
         }
     }

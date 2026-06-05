@@ -16,6 +16,7 @@ import com.example.healthcare.data.HealthState
 import com.example.healthcare.ui.screens.DetailScreen
 import com.example.healthcare.ui.screens.MainHealthSpectrumScreen
 import com.example.healthcare.ui.screens.OnboardingScreen
+import com.example.healthcare.ui.screens.SettingsScreen
 import com.example.healthcare.ui.screens.SocialPartyScreen
 import com.example.healthcare.ui.screens.UserNameSettingScreen
 
@@ -73,12 +74,19 @@ fun HealthApp() {
             MainHealthSpectrumScreen(
                 healthState = healthState,
                 onNavigateToDetail = { itemName -> navController.navigate("detail/$itemName") },
-                onNavigateToSocial = { navController.navigate("social") }
+                onNavigateToSocial = { navController.navigate("social") },
+                onNavigateToSettings = { navController.navigate("settings") }
             )
         }
         composable("social") {
             SocialPartyScreen(
                 myUid = healthState.userId, // HealthState에 userId가 있다고 가정하거나 Onboarding에서 저장된 값 사용
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable("settings") {
+            SettingsScreen(
+                healthState = healthState,
                 onBack = { navController.popBackStack() }
             )
         }

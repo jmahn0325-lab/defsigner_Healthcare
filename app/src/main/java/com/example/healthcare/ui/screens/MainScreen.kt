@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -40,7 +41,8 @@ import kotlin.math.roundToInt
 fun MainHealthSpectrumScreen(
     healthState: HealthState,
     onNavigateToDetail: (String) -> Unit,
-    onNavigateToSocial: () -> Unit
+    onNavigateToSocial: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -112,6 +114,9 @@ fun MainHealthSpectrumScreen(
                 actions = {
                     IconButton(onClick = onNavigateToSocial) {
                         Icon(imageVector = Icons.Default.Group, contentDescription = "소셜 파티")
+                    }
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(imageVector = Icons.Default.Settings, contentDescription = "설정")
                     }
                     IconButton(
                         onClick = {

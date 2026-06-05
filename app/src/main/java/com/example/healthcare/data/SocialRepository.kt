@@ -3,7 +3,6 @@ package com.example.healthcare.data
 import android.util.Log
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +28,7 @@ class SocialRepository {
             val inviteCode = generateInviteCode()
             val partyId = UUID.randomUUID().toString()
             
-            val partyData = hashMapOf(
+            val partyData = mapOf<String, Any>(
                 "partyId" to partyId,
                 "partyName" to partyName,
                 "inviteCode" to inviteCode,
@@ -64,7 +63,7 @@ class SocialRepository {
                 val parties = snapshot.toObjects(Party::class.java)
                 Log.d("SocialRepository", "Real-time update: ${parties.size} parties found")
                 // createdAt 정보가 서버에서 아직 오지 않았을 경우를 고려해 안전하게 정렬
-                val sortedParties = parties.sortedByDescending { it.createdAt }
+                val sortedParties = parties.sortedByDescending { it.createdAt?.seconds ?: 0L }
                 trySend(sortedParties)
             }
         }
@@ -82,7 +81,7 @@ class SocialRepository {
                 .whereArrayContains("memberUids", myUid)
                 .get()
                 .await()
-            query.toObjects(Party::class.java).sortedByDescending { it.createdAt }
+            query.toObjects(Party::class.java).sortedByDescending { it.createdAt?.seconds ?: 0L }
         } catch (e: Exception) {
             Log.e("SocialRepository", "Error getting my parties", e)
             emptyList()
@@ -146,8 +145,12 @@ class SocialRepository {
                 .await()
             
             // 3. 점수 순으로 내림차순 정렬 (서버 인덱스 오류 방지를 위해 클라이언트 정렬)
-            usersSnapshot.toObjects(UserScore::class.java)
-                .sortedByDescending { it.totalScore }
+            val users = usersSnapshot.documents.mapNotNull { doc ->
+                val user = doc.toObject(UserScore::class.java)
+                // isPublic이 Boolean 기본값 false로 오작동하는 것을 방지하기 위해 명시적으로 가져옴
+                user?.copy(isPublic = doc.getBoolean("isPublic") ?: true)
+            }
+            users.sortedByDescending { it.totalScore }
         } catch (e: Exception) {
             Log.e("SocialRepository", "Error fetching leaderboard", e)
             emptyList()
@@ -163,7 +166,25 @@ class SocialRepository {
             if (!userDoc.exists()) return null
             
             val displayName = userDoc.getString("displayName") ?: "알 수 없음"
-            val privacy = userDoc.get("privacySettings", PrivacySettings::class.java) ?: PrivacySettings()
+            val isPublic = userDoc.getBoolean("isPublic") ?: true
+            
+            // 전체 공개가 아니면 빈 점수 맵 반환 (UI에서 '비공개'로 처리됨)
+            if (!isPublic) {
+                return MemberDetails(memberUid, displayName, emptyMap())
+            }
+
+            // 개별 항목별 공개 설정 (privacySettings 맵/객체 읽기)
+            val privacyMap = userDoc.get("privacySettings") as? Map<String, Any>
+            val privacy = if (privacyMap != null) {
+                PrivacySettings(
+                    alcoholVisible = privacyMap["alcoholVisible"] as? Boolean ?: true,
+                    caffeineVisible = privacyMap["caffeineVisible"] as? Boolean ?: true,
+                    smokingVisible = privacyMap["smokingVisible"] as? Boolean ?: true,
+                    healthVisible = privacyMap["healthVisible"] as? Boolean ?: true
+                )
+            } else {
+                PrivacySettings()
+            }
 
             // 2. 가장 최근의 일일 로그 1개 가져오기
             val logsQuery = db.collection("Users").document(memberUid)
@@ -196,6 +217,7 @@ class SocialRepository {
 
             MemberDetails(memberUid, displayName, filteredScores)
         } catch (e: Exception) {
+            Log.e("SocialRepository", "Error fetching member details", e)
             null
         }
     }
@@ -204,7 +226,7 @@ class SocialRepository {
 
     suspend fun sendNudge(senderId: String, receiverId: String, factor: String): Boolean {
         return try {
-            val nudgeData = hashMapOf(
+            val nudgeData = mapOf<String, Any>(
                 "senderId" to senderId,
                 "receiverId" to receiverId,
                 "targetFactor" to factor,
@@ -222,7 +244,7 @@ class SocialRepository {
     // 신규 유저 등록
     suspend fun createUser(uid: String, userName: String, gender: String): Boolean {
         return try {
-            val userData = hashMapOf(
+            val userData = mapOf<String, Any>(
                 "uid" to uid,
                 "displayName" to userName,
                 "gender" to gender,
@@ -246,6 +268,21 @@ class SocialRepository {
             true
         } catch (e: Exception) {
             Log.e("SocialRepository", "Error updating score", e)
+            false
+        }
+    }
+
+    // 유저 프로필 업데이트 (이름, 소개글, 공개여부)
+    suspend fun updateUserProfile(uid: String, name: String, bio: String, isPublic: Boolean): Boolean {
+        return try {
+            db.collection("Users").document(uid).update(
+                "displayName", name,
+                "bio", bio,
+                "isPublic", isPublic
+            ).await()
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "Error updating profile", e)
             false
         }
     }

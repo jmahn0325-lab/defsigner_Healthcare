@@ -35,6 +35,8 @@ data class PenaltyDetail(
 class HealthState private constructor(private val context: Context?) {
     var userId by mutableStateOf("guest_user")
     var userName by mutableStateOf("")
+    var bio by mutableStateOf("") // 소개글 추가
+    var isPublic by mutableStateOf(true) // 공개 여부 추가
     var gender by mutableStateOf("Male")
     var isOnboardingCompleted by mutableStateOf(false)
 
@@ -241,6 +243,8 @@ class HealthState private constructor(private val context: Context?) {
     fun saveProfile() {
         prefs?.edit()?.apply {
             putString("userName", userName)
+            putString("bio", bio)
+            putBoolean("isPublic", isPublic)
             putString("gender", gender)
             putBoolean("isOnboardingCompleted", isOnboardingCompleted)
             putFloat("activityTarget", activityTarget)
@@ -260,6 +264,8 @@ class HealthState private constructor(private val context: Context?) {
             ?: "guest_user"
 
         userName = prefs?.getString("userName", "") ?: ""
+        bio = prefs?.getString("bio", "") ?: ""
+        isPublic = prefs?.getBoolean("isPublic", true) ?: true
         val alcoholName = prefs?.getString("selection_알코올", "소주") ?: "소주"
         alcoholTypes.find { it.name == alcoholName }?.let { selectedAlcoholType = it }
         

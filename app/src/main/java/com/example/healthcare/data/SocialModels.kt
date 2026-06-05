@@ -20,6 +20,8 @@ data class UserScore(
     val uid: String = "",
     val displayName: String = "",
     val totalScore: Int = 0,
+    val bio: String = "",
+    val isPublic: Boolean = true,
     val fcmToken: String = ""
 )
 
