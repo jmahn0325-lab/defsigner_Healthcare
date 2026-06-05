@@ -30,6 +30,7 @@ data class PenaltyDetail(
 )
 
 class HealthState private constructor(private val context: Context?) {
+    var userId by mutableStateOf("guest_user") // Firebase Auth 연동 전 임시 ID
     var gender by mutableStateOf("Male")
     var isOnboardingCompleted by mutableStateOf(false)
 

@@ -1,0 +1,268 @@
+package com.example.healthcare.ui.screens
+
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.healthcare.data.*
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val repository = remember { SocialRepository() }
+    
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var showJoinDialog by remember { mutableStateOf(false) }
+    var selectedMember by remember { mutableStateOf<UserScore?>(null) }
+    
+    var partyNameInput by remember { mutableStateOf("") }
+    var inviteCodeInput by remember { mutableStateOf("") }
+    
+    // 임시 데이터 (실제로는 Firestore에서 실시간 리스너나 StateFlow로 가져와야 함)
+    // 현재는 편의상 단일 파티 시나리오로 구현
+    val currentPartyId = "global_party_id" // 예시
+    var leaderboard by remember { mutableStateOf<List<UserScore>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    // 데이터 로드
+    LaunchedEffect(Unit) {
+        isLoading = true
+        leaderboard = repository.getPartyLeaderboard(currentPartyId)
+        isLoading = false
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("소셜 파티", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로가기")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showCreateDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = "파티 생성")
+                    }
+                    IconButton(onClick = { showJoinDialog = true }) {
+                        Icon(Icons.Default.Group, contentDescription = "파티 참여")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            } else if (leaderboard.isEmpty()) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("참여 중인 파티가 없습니다.", color = Color.Gray)
+                    Text("친구를 초대하거나 코드를 입력해 참여하세요!", color = Color.Gray, fontSize = 12.sp)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 16.dp)
+                ) {
+                    item {
+                        Text("파티 리더보드", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    
+                    itemsIndexed(leaderboard) { index, member ->
+                        LeaderboardItem(
+                            rank = index + 1,
+                            member = member,
+                            isMe = member.uid == myUid,
+                            onClick = { selectedMember = member }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // 파티 생성 다이얼로그
+    if (showCreateDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateDialog = false },
+            title = { Text("새 파티 생성") },
+            text = {
+                OutlinedTextField(
+                    value = partyNameInput,
+                    onValueChange = { partyNameInput = it },
+                    label = { Text("파티 이름") }
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    scope.launch {
+                        val code = repository.createParty(partyNameInput, myUid)
+                        if (code != "ERROR") {
+                            Toast.makeText(context, "파티 생성 완료! 초대 코드: $code", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "파티 생성에 실패했습니다. Firebase 설정을 확인해주세요.", Toast.LENGTH_LONG).show()
+                        }
+                        showCreateDialog = false
+                    }
+                }) { Text("생성") }
+            }
+        )
+    }
+
+    // 파티 참여 다이얼로그
+    if (showJoinDialog) {
+        AlertDialog(
+            onDismissRequest = { showJoinDialog = false },
+            title = { Text("파티 참여하기") },
+            text = {
+                OutlinedTextField(
+                    value = inviteCodeInput,
+                    onValueChange = { inviteCodeInput = it },
+                    label = { Text("6자리 초대 코드") }
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    scope.launch {
+                        val success = repository.joinParty(inviteCodeInput, myUid)
+                        if (success) {
+                            Toast.makeText(context, "파티에 참여했습니다!", Toast.LENGTH_SHORT).show()
+                            leaderboard = repository.getPartyLeaderboard(currentPartyId) // 갱신
+                        } else {
+                            Toast.makeText(context, "잘못된 코드입니다.", Toast.LENGTH_SHORT).show()
+                        }
+                        showJoinDialog = false
+                    }
+                }) { Text("참여") }
+            }
+        )
+    }
+
+    // 멤버 상세 정보 다이얼로그 (콕 찌르기 포함)
+    if (selectedMember != null) {
+        MemberDetailDialog(
+            member = selectedMember!!,
+            repository = repository,
+            myUid = myUid,
+            onDismiss = { selectedMember = null }
+        )
+    }
+}
+
+@Composable
+fun LeaderboardItem(rank: Int, member: UserScore, isMe: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        color = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = rank.toString(),
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.width(32.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = member.displayName, fontWeight = FontWeight.Bold)
+                if (isMe) Text("(나)", fontSize = 10.sp, color = Color.Gray)
+            }
+            Text(
+                text = "${member.totalScore}점",
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
+    }
+}
+
+@Composable
+fun MemberDetailDialog(
+    member: UserScore,
+    repository: SocialRepository,
+    myUid: String,
+    onDismiss: () -> Unit
+) {
+    var details by remember { mutableStateOf<MemberDetails?>(null) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    LaunchedEffect(member.uid) {
+        details = repository.getMemberDetailLogs(member.uid)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("${member.displayName}님의 건강 로그") },
+        text = {
+            if (details == null) {
+                CircularProgressIndicator()
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (details!!.scores.isEmpty()) {
+                        Text("비공개 항목이거나 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    details!!.scores.forEach { (factor, score) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(factor, fontWeight = FontWeight.Medium)
+                                Text("${score.toInt()}점", fontSize = 12.sp, color = Color.Gray)
+                            }
+                            if (member.uid != myUid) {
+                                IconButton(onClick = {
+                                    scope.launch {
+                                        val success = repository.sendNudge(myUid, member.uid, factor)
+                                        if (success) {
+                                            Toast.makeText(context, "${factor} 항목을 콕 찔렀습니다!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }) {
+                                    Icon(
+                                        Icons.Default.NotificationsActive,
+                                        contentDescription = "콕 찌르기",
+                                        tint = if (score < 60) Color.Red else Color.Gray
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } }
+    )
+}

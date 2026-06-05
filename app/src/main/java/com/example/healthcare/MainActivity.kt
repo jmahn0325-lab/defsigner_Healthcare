@@ -16,6 +16,7 @@ import com.example.healthcare.data.HealthState
 import com.example.healthcare.ui.screens.DetailScreen
 import com.example.healthcare.ui.screens.MainHealthSpectrumScreen
 import com.example.healthcare.ui.screens.OnboardingScreen
+import com.example.healthcare.ui.screens.SocialPartyScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,7 +57,14 @@ fun HealthApp() {
         composable("main") {
             MainHealthSpectrumScreen(
                 healthState = healthState,
-                onNavigateToDetail = { itemName -> navController.navigate("detail/$itemName") }
+                onNavigateToDetail = { itemName -> navController.navigate("detail/$itemName") },
+                onNavigateToSocial = { navController.navigate("social") }
+            )
+        }
+        composable("social") {
+            SocialPartyScreen(
+                myUid = healthState.userId, // HealthState에 userId가 있다고 가정하거나 Onboarding에서 저장된 값 사용
+                onBack = { navController.popBackStack() }
             )
         }
         composable("detail/{itemName}") { backStackEntry ->
