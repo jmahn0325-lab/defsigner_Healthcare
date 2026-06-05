@@ -26,6 +26,7 @@ import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import com.example.healthcare.data.HealthState
+import com.example.healthcare.data.SocialRepository
 import com.example.healthcare.ui.components.*
 import com.example.healthcare.utils.*
 import com.example.healthcare.widget.HealthWidget
@@ -51,6 +52,13 @@ fun MainHealthSpectrumScreen(
         if (availabilityStatus == HealthConnectClient.SDK_AVAILABLE) {
             HealthConnectClient.getOrCreate(context)
         } else null
+    }
+    
+    val repository = remember { SocialRepository() }
+
+    // 메인 화면 진입 시 점수 서버 동기화
+    LaunchedEffect(healthState.getHealthScore()) {
+        repository.updateUserScore(healthState.userId, healthState.getHealthScore())
     }
 
     val healthPermissions = setOf(

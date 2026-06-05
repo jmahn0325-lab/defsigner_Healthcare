@@ -139,14 +139,17 @@ class SocialRepository {
 
             if (memberUids.isEmpty()) return emptyList()
 
-            // 2. 멤버들의 건강 점수 정보 쿼리 (whereIn은 최대 30명까지 지원)
-            db.collection("Users")
+            // 2. 멤버들의 정보 가져오기 (whereIn 사용)
+            val usersSnapshot = db.collection("Users")
                 .whereIn("uid", memberUids)
-                .orderBy("totalScore", Query.Direction.DESCENDING)
                 .get()
                 .await()
-                .toObjects(UserScore::class.java)
+            
+            // 3. 점수 순으로 내림차순 정렬 (서버 인덱스 오류 방지를 위해 클라이언트 정렬)
+            usersSnapshot.toObjects(UserScore::class.java)
+                .sortedByDescending { it.totalScore }
         } catch (e: Exception) {
+            Log.e("SocialRepository", "Error fetching leaderboard", e)
             emptyList()
         }
     }
@@ -230,6 +233,19 @@ class SocialRepository {
             true
         } catch (e: Exception) {
             Log.e("SocialRepository", "Error creating user", e)
+            false
+        }
+    }
+
+    // 유저 점수 동기화
+    suspend fun updateUserScore(uid: String, score: Int): Boolean {
+        return try {
+            db.collection("Users").document(uid)
+                .update("totalScore", score)
+                .await()
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "Error updating score", e)
             false
         }
     }
