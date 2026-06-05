@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "1234567890",
-    "project_id": "placeholder-project",
-    "storage_bucket": "placeholder-project.appspot.com"
+    "project_number": "1008546113017",
+    "project_id": "healthcare-project-5081d",
+    "storage_bucket": "healthcare-project-5081d.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1234567890:android:placeholderid",
+        "mobilesdk_app_id": "1:1008546113017:android:078d66f276cb6e71878928",
         "android_client_info": {
           "package_name": "com.example.healthcare"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "placeholder_api_key"
+          "current_key": "AIzaSyCCbyY2TvC2rSVXQXzRIyAOw6H-gzvdrKg"
         }
       ],
       "services": {
