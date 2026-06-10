@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive Icon 또한 원형 또는 특정 모양으로 잘립니다.
+  중앙의 Safe Zone(약 72dp) 내부에 로고가 오도록 여백을 충분히 설정했습니다.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:drawable="@drawable/app_logo"
+        android:gravity="center"
+        android:top="32dp"
+        android:bottom="32dp"
+        android:left="32dp"
+        android:right="32dp" />
+</layer-list>
