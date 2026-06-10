@@ -11,7 +11,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -33,7 +36,36 @@ fun TopSpectrumBanner(score: Int = 70, message: String = "수면은 충분하지
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(text = "$score", fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(8.dp))
-                    LinearProgressIndicator(progress = { score / 100f }, modifier = Modifier.weight(1f).height(12.dp).padding(bottom = 6.dp), color = Color.Blue)
+                    
+                    // 그라데이션 히트바 (고정된 그라데이션이 잘려 보이는 방식)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(20.dp) // 두께 증가
+                            .padding(bottom = 6.dp)
+                            .background(Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    ) {
+                        // 전체 그라데이션 배경
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(Color.Red, Color.Yellow, Color.Green)
+                                    )
+                                )
+                        )
+                        // 점수에 따라 오른쪽에서부터 회색 마스크로 덮기
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(1f - score / 100f)
+                                .fillMaxHeight()
+                                .align(Alignment.CenterEnd)
+                                .background(Color(0xFFF5F5F5)) // 배경과 어울리는 밝은 회색
+                        )
+                    }
+
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "100", fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
                 }
