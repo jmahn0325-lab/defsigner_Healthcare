@@ -380,12 +380,12 @@ class HealthState private constructor(private val context: Context?) {
             
             when {
                 pair.contains(HealthFactorType.SLEEP) && pair.contains(HealthFactorType.ALCOHOL) -> {
-                    problem = "수면 부족 상태에서 전날의 음주가 겹쳐 숙취 해소가 몹시 느려지고 있어요. 🥺"
+                    problem = "수면 부족 상태에서 음주가 겹쳐 숙취 해소가 몹시 느려지고 있어요. 🥺 알코올이 분해되면 교감신경이 활성화되어 수면의 질이 나빠집니다."
                     action = "오늘은 술자리 대신 물을 충분히 마시고 푹 쉬어보세요. 간에 휴식을 주면 내일 컨디션이 빠르게 돌아옵니다!"
                 }
                 pair.contains(HealthFactorType.SLEEP) && pair.contains(HealthFactorType.CAFFEINE) -> {
-                    problem = "카페인과 수면이 위험 상태입니다! ☕ 몸에 남은 과도한 카페인이 깊은 수면을 방해하고 있어요."
-                    action = "오늘 밤엔 커피 대신 디카페인이나 따뜻한 차를 마시고 일찍 누워볼까요? 잠만 제대로 푹 자도 내일 아침 피로감이 확 사라질 거예요."
+                    problem = "카페인과 수면이 위험 상태입니다! ☕ 몸에 남은 과도한 카페인이 정신을 각성시켜 깊은 수면을 방해하고 있어요."
+                    action = "오늘 밤엔 커피 대신 디카페인이나 따뜻한 차를 한 잔 마시고 일찍 누워볼까요? 잠만 제대로 푹 자도 내일 아침 피로감이 확 사라질 거예요."
                 }
                 pair.contains(HealthFactorType.SLEEP) && pair.contains(HealthFactorType.SCREEN_TIME) -> {
                     problem = "늦은 시간까지 이어진 스크린타임이 수면 부족의 직격탄이 되고 있어요. 📱 취침 전 밝은 화면은 수면 호르몬을 막습니다."
@@ -404,8 +404,8 @@ class HealthState private constructor(private val context: Context?) {
                     action = "오늘은 자기 전 흡연을 한 번만 건너뛰고, 대신 물을 마시며 몸을 천천히 진정시켜보세요. 잠만 조금 더 확보해도 내일의 피로감과 흡연 욕구가 함께 줄어들 수 있어요."
                 }
                 pair.contains(HealthFactorType.SLEEP) && pair.contains(HealthFactorType.ACTIVITY) -> {
-                    problem = "수면이 부족한 상태가 계속되면 몸이 움직일 에너지까지 같이 떨어져요. 😴 반대로 활동량이 너무 적으면 밤에도 몸이 제대로 피로해지지 않아 잠의 질이 더 나빠질 수 있어요."
-                    action = "오늘은 무리한 운동보다 10분 정도 가볍게 걸으며 몸의 리듬을 다시 깨워보세요. 잠깐의 움직임이 밤의 숙면과 내일의 컨디션을 동시에 도와줄 거예요."
+                    problem = "수면이 부족한 상태가 계속되면 몸이 움직일 에너지까지 같이 떨어져요. 😴 반대로 활동량이 너무 적으면 밤에도 몸이 제대로 피로해지지 않아 수면의 질이 더 나빠질 수 있어요."
+                    action = "오늘은 무리한 운동보다 10분 정도 가볍게 걸으며 몸의 리듬을 다시 깨워보세요. 잠깐의 움직임이 꿀잠과 내일의 컨디션을 동시에 도와줄 거예요."
                 }
                 else -> {
                     problem = "현재 ${main.type.displayName} 상태가 가장 위험해요! 🚨 여기에 ${partner.type.displayName}까지 더해져 몸의 회복을 방해하고 있습니다."
@@ -428,7 +428,7 @@ class HealthState private constructor(private val context: Context?) {
                 else -> "${main.type.displayName} 수치가 매우 심각합니다! ${p1.type.displayName}와 ${p2.type.displayName} 또한 건강 회복을 가로막고 있어요."
             }
             
-            val action = "오늘은 다른 것보다 오직 '${main.type.displayName} 조절'에만 집중해보세요. 하나만 제대로 관리해도 컨디션은 금방 돌아옵니다."
+            val action = "오늘은 천천히 '${main.type.displayName} 조절'에만 집중해보세요. 그렇게 차근차근 ${p1.type.displayName}와(과) ${p2.type.displayName}도 점차 개선되는 나를 발견할 수 있을 거에요."
             return "$problem\n\n$action\n\n${getMotivation(main.status)}"
         }
 
@@ -438,10 +438,10 @@ class HealthState private constructor(private val context: Context?) {
             val p2 = sorted[1]
             val p3 = sorted[2]
             
-            val problem = "${main.type.displayName} 상태에 빨간불이 켜졌어요! ⚠️ 거기에 ${p2.type.displayName}, ${p3.type.displayName} 등 여러 문제가 겹쳐 몸이 많이 지쳐있습니다."
+            val problem = "${main.type.displayName} 상태에 빨간불이 켜졌어요! ⚠️ 거기에 ${p2.type.displayName}, ${p3.type.displayName} 등 여러 문제가 겹쳐 전반적으로 몸이 많이 지쳐있습니다."
             val action = "한 번에 다 고치기 어렵다면, 오늘은 딱 하나! ${main.type.displayName} 관련 습관부터 실천해 보세요. 작은 행동 하나가 무너진 리듬을 되돌리는 시작이 됩니다."
             
-            return "$problem\n\n$action\n\n건강은 한 걸음부터입니다. 오늘 가장 심각한 하나만이라도 꼭 지켜내 봐요!"
+            return "$problem\n\n$action\n\n건강은 한 걸음부터입니다. 오늘 가장 중요한 하나만이라도 꼭 지켜내 봐요!"
         }
 
         private fun buildSingleMessage(main: HealthFactor): String {
@@ -566,8 +566,16 @@ class HealthState private constructor(private val context: Context?) {
         }
 
         private fun getMotivation(status: HealthStatus): String = when (status) {
-            HealthStatus.DANGER -> "이대로라면 내일 1교시 '자체휴강' 확정입니다. 지금 바로 움직여요!"
-            else -> "조금만 신경 쓰면 다시 쌩쌩한 컨디션으로 돌아갈 수 있어요. 화이팅!"
+            HealthStatus.DANGER -> listOf(
+                "이대로라면 내일 첫 수업은 '자체휴강' 확정입니다. 지금 바로 움직여요!",
+                "몸이 보내는 경고를 무시하지 마세요. 지금의 휴식이 내일의 당신을 구합니다! 🚨",
+                "배터리가 0%가 되기 전에 충전하는 것이 필연적이에요. 오늘만큼은 자신을 최우선으로 돌봐주세요."
+            ).random()
+            else -> listOf(
+                "조금만 신경 쓰면 다시 쌩쌩한 컨디션으로 돌아갈 수 있어요. 화이팅!",
+                "작은 습관 하나만 바꿔도 몸이 훨씬 가벼워질 거예요. 당신의 건강을 응원합니다! ✨",
+                "완벽하지 않아도 괜찮아요. 지금 할 수 있는 작은 것부터 하나씩 실천해 봐요."
+            ).random()
         }
     }
 
