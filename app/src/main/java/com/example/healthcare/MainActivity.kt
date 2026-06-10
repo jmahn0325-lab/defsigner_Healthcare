@@ -1,10 +1,15 @@
 package com.example.healthcare
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -12,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import com.example.healthcare.data.FCMTokenManager
 import com.example.healthcare.data.HealthState
 import com.example.healthcare.ui.screens.*
@@ -82,6 +88,23 @@ fun HealthApp() {
     // 싱글톤 인스턴스를 가져오고 초기화합니다.
     val healthState = remember { HealthState.getInstance(context) }
 
+    // 알림 권한 요청 (안드로이드 13 이상)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        if (!isGranted) {
+            Toast.makeText(context, "알림 권한이 거부되었습니다. 중요 알림을 받지 못할 수 있습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     val startDestination = when {
         healthState.userName.isBlank() -> "nameSetting"
         !healthState.isOnboardingCompleted -> "onboarding"
@@ -120,16 +143,14 @@ fun HealthApp() {
         composable("settings") {
             SettingsScreen(
                 healthState = healthState,
-                onBack = { navController.popBackStack() }
-            )
+            ) { navController.popBackStack() }
         }
         composable("detail/{itemName}") { backStackEntry ->
             val itemName = backStackEntry.arguments?.getString("itemName") ?: "상세"
             DetailScreen(
                 itemName = itemName,
                 healthState = healthState,
-                onBack = { navController.popBackStack() }
-            )
+            ) { navController.popBackStack() }
         }
     }
 }
