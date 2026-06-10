@@ -17,7 +17,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.healthcare.data.HealthState
-import com.example.healthcare.ui.screens.ChatScreen
 import com.example.healthcare.ui.screens.DetailScreen
 import com.example.healthcare.ui.screens.MainHealthSpectrumScreen
 import com.example.healthcare.ui.screens.OnboardingScreen
@@ -126,12 +125,8 @@ fun HealthApp() {
         composable("social") {
             SocialPartyScreen(
                 myUid = healthState.userId,
-                onBack = { navController.popBackStack() },
-                onNavigateToChat = { navController.navigate("chat") }
+                onBack = { navController.popBackStack() }
             )
-        }
-        composable("chat") {
-            ChatScreen(onBack = { navController.popBackStack() })
         }
         composable("settings") {
             SettingsScreen(
