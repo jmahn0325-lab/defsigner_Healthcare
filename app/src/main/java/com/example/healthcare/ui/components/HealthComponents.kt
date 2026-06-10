@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -24,54 +25,78 @@ import kotlin.math.roundToInt
 
 @Composable
 fun TopSpectrumBanner(score: Int = 70, message: String = "수면은 충분하지만, 어제 음주를 많이 하셨네요.\n술을 줄이고 물을 많이 마셔볼까요?", onClick: () -> Unit = {}) {
-    Box(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Black).clickable { onClick() }.padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    ElevatedCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             val emoji = when {
                 score >= 80 -> "😏"
                 score >= 50 -> "😐"
                 else -> "😫"
             }
-            Box(modifier = Modifier.size(60.dp).border(1.dp, Color.Black, RoundedCornerShape(50)), contentAlignment = Alignment.Center) { Text(text = emoji, fontSize = 32.sp) }
+            Surface(
+                modifier = Modifier.size(64.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(text = emoji, fontSize = 32.sp)
+                }
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text(text = "$score", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "$score",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
                     
-                    // 그라데이션 히트바 (고정된 그라데이션이 잘려 보이는 방식)
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(20.dp) // 두께 증가
-                            .padding(bottom = 6.dp)
-                            .background(Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .height(12.dp)
+                            .padding(bottom = 4.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        // 전체 그라데이션 배경
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(RoundedCornerShape(8.dp))
                                 .background(
                                     brush = Brush.linearGradient(
-                                        colors = listOf(Color.Red, Color.Yellow, Color.Green)
+                                        colors = listOf(Color(0xFFFF5252), Color(0xFFFFD740), Color(0xFF69F0AE))
                                     )
                                 )
                         )
-                        // 점수에 따라 오른쪽에서부터 회색 마스크로 덮기
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(1f - score / 100f)
                                 .fillMaxHeight()
                                 .align(Alignment.CenterEnd)
-                                .background(Color(0xFFF5F5F5)) // 배경과 어울리는 밝은 회색
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                         )
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "100", fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    Text(text = "100", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 }
-                Text(text = message, fontSize = 12.sp, lineHeight = 16.sp)
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Icon(imageVector = Icons.Default.Info, contentDescription = "상세 정보", modifier = Modifier.align(Alignment.Top))
         }
     }
 }
@@ -79,45 +104,78 @@ fun TopSpectrumBanner(score: Int = 70, message: String = "수면은 충분하지
 @Composable
 fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: Float, maxValue: Float, onClick: () -> Unit = {}) {
     val progress = (value / maxValue.coerceAtLeast(1f)).coerceIn(0f, 1f)
-    val color = if (value > maxValue) Color.Red else MaterialTheme.colorScheme.primary
+    val color = if (value > maxValue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
 
-    Box(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Gray).clickable { onClick() }.padding(12.dp)) {
-        Column {
+    OutlinedCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = emoji, fontSize = 20.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Surface(
+                        modifier = Modifier.size(32.dp),
+                        shape = CircleShape,
+                        color = color.copy(alpha = 0.1f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = emoji, fontSize = 16.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 }
-                Text(text = "${value.toInt()}$valueSuffix", fontSize = 14.sp, color = color)
+                Text(text = "${value.toInt()}$valueSuffix", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = color)
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             LinearProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(10.dp).border(1.dp, Color.LightGray),
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
                 color = color,
-                trackColor = Color.Transparent
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "Max: ${maxValue.toInt()}$valueSuffix", fontSize = 10.sp, color = Color.Gray, modifier = Modifier.align(Alignment.End))
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(text = "목표: ${maxValue.toInt()}$valueSuffix", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.align(Alignment.End))
         }
     }
 }
 
 @Composable
 fun HealthApiRecord(emoji: String, title: String, value: String, progress: Float, color: Color, onClick: () -> Unit = {}) {
-    Box(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Gray).clickable { onClick() }.padding(12.dp)) {
-        Column {
+    OutlinedCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = emoji, fontSize = 20.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Surface(
+                        modifier = Modifier.size(32.dp),
+                        shape = CircleShape,
+                        color = color.copy(alpha = 0.1f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = emoji, fontSize = 16.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 }
-                Text(text = value, fontSize = 14.sp)
+                Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(10.dp).border(1.dp, Color.LightGray), color = color, trackColor = Color.Transparent)
+            Spacer(modifier = Modifier.height(16.dp))
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                color = color,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
         }
     }
 }
