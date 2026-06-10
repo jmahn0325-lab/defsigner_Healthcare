@@ -95,10 +95,10 @@ class SpectrumWidget : GlanceAppWidget() {
                             )
                             Spacer(modifier = GlanceModifier.width(8.dp))
                             
-                            // 프로그레스 바 (점수에 따라 색상 변경)
+                            // 프로그레스 바 (점수에 따라 색상 변경, 두께 증가)
                             LinearProgressIndicator(
                                 progress = score / 100f,
-                                modifier = GlanceModifier.defaultWeight().height(8.dp),
+                                modifier = GlanceModifier.defaultWeight().height(16.dp),
                                 color = ColorProvider(gaugeColor, gaugeColor),
                                 backgroundColor = ColorProvider(Color.LightGray, Color.LightGray)
                             )
