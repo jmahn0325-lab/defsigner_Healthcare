@@ -129,6 +129,21 @@ class SocialRepository {
         }
     }
 
+    // 파티 탈퇴하기
+    suspend fun leaveParty(partyId: String, myUid: String): Boolean {
+        Log.d("SocialRepository", "leaveParty attempt: Party=$partyId, User=$myUid")
+        return try {
+            db.collection("Parties").document(partyId)
+                .update("memberUids", FieldValue.arrayRemove(myUid))
+                .await()
+            Log.d("SocialRepository", "Leave Success: $partyId")
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "Leave Error", e)
+            false
+        }
+    }
+
     // --- 2. 파티원 리더보드 조회 ---
 
     suspend fun getPartyLeaderboard(partyId: String): List<UserScore> {

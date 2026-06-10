@@ -15,8 +15,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +45,8 @@ fun SocialPartyScreen(healthState: HealthState, onBack: () -> Unit) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var showJoinDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf<Party?>(null) }
+    var showLeaveConfirmDialog by remember { mutableStateOf(false) }
+    var showSettingsMenu by remember { mutableStateOf(false) }
     var selectedMember by remember { mutableStateOf<UserScore?>(null) }
     var viewingParty by remember { mutableStateOf<Party?>(null) }
     
@@ -88,6 +92,27 @@ fun SocialPartyScreen(healthState: HealthState, onBack: () -> Unit) {
                         }
                         IconButton(onClick = { showJoinDialog = true }) {
                             Icon(Icons.Default.Group, contentDescription = "파티 참여")
+                        }
+                    } else {
+                        Box {
+                            IconButton(onClick = { showSettingsMenu = true }) {
+                                Icon(Icons.Default.Settings, contentDescription = "설정")
+                            }
+                            DropdownMenu(
+                                expanded = showSettingsMenu,
+                                onDismissRequest = { showSettingsMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("파티 탈퇴하기") },
+                                    onClick = {
+                                        showSettingsMenu = false
+                                        showLeaveConfirmDialog = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.ExitToApp, contentDescription = null)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -244,6 +269,39 @@ fun SocialPartyScreen(healthState: HealthState, onBack: () -> Unit) {
             },
             dismissButton = {
                 TextButton(onClick = { showEditDialog = null }) { Text("취소") }
+            }
+        )
+    }
+
+    // 파티 탈퇴 확인 다이얼로그
+    if (showLeaveConfirmDialog && viewingParty != null) {
+        AlertDialog(
+            onDismissRequest = { showLeaveConfirmDialog = false },
+            title = { Text("파티 탈퇴") },
+            text = { Text("'${viewingParty?.partyName}' 파티에서 탈퇴하시겠습니까? 탈퇴 후에는 리더보드에서 정보가 삭제됩니다.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            val success = repository.leaveParty(viewingParty!!.partyId, myUid)
+                            if (success) {
+                                Toast.makeText(context, "파티에서 탈퇴했습니다.", Toast.LENGTH_SHORT).show()
+                                viewingParty = null
+                            } else {
+                                Toast.makeText(context, "탈퇴에 실패했습니다.", Toast.LENGTH_SHORT).show()
+                            }
+                            showLeaveConfirmDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("탈퇴")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLeaveConfirmDialog = false }) {
+                    Text("취소")
+                }
             }
         )
     }
