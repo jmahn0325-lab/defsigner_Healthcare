@@ -193,21 +193,31 @@ fun HealthBarChart(
                         .fillMaxWidth()
                         .fillMaxHeight(targetHeightFraction)
                         .align(Alignment.BottomEnd)
-                        .padding(start = 48.dp, bottom = 20.dp)
+                        .padding(bottom = 20.dp) // padding(start = 48.dp) 제거하여 y축 왼쪽부터 시작
                 ) {
-                    // 목표 수평선
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(themeColor.copy(alpha = 0.4f)).align(Alignment.TopStart))
+                    // 목표 수평선 (차트 영역 안쪽에만 표시)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 48.dp)
+                            .height(1.dp)
+                            .background(themeColor.copy(alpha = 0.4f))
+                            .align(Alignment.TopStart)
+                    )
                     
-                    // 목표치 텍스트 라벨 (왼쪽 배치)
+                    // 목표치 텍스트 라벨 (y축 왼쪽 배치)
                     val formattedTarget = if (targetValue == targetValue.toInt().toFloat()) "${targetValue.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", targetValue)
                     Text(
-                        text = "목표: $formattedTarget$yAxisTitle$goalSuffix",
-                        fontSize = 9.sp,
+                        text = "목표\n$formattedTarget$yAxisTitle\n$goalSuffix",
+                        fontSize = 8.sp,
+                        lineHeight = 9.sp,
                         color = themeColor,
                         fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.End,
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(start = 4.dp, top = 2.dp)
+                            .width(44.dp)
+                            .padding(top = 2.dp)
                     )
                 }
             }
