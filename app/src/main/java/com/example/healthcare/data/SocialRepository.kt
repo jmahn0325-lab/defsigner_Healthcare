@@ -459,43 +459,6 @@ class SocialRepository {
         }
     }
 
-    // --- 5. 1:1 개인 쪽지 발송 (mailbox) ---
-
-    suspend fun sendPrivateMail(senderId: String, receiverId: String, title: String, body: String, action: String): Boolean {
-        return try {
-            val mailData = mapOf(
-                "senderId" to senderId,
-                "receiverId" to receiverId,
-                "title" to title,
-                "body" to body,
-                "action" to action,
-                "timestamp" to FieldValue.serverTimestamp()
-            )
-            db.collection("mailbox").add(mailData).await()
-            true
-        } catch (e: Exception) {
-            Log.e("SocialRepository", "Error sending private mail", e)
-            false
-        }
-    }
-
-    // --- 6. 실시간 공용 채팅 (messages) ---
-
-    suspend fun sendMessage(senderId: String, text: String): Boolean {
-        return try {
-            val messageData = mapOf(
-                "senderId" to senderId,
-                "text" to text,
-                "timestamp" to FieldValue.serverTimestamp()
-            )
-            db.collection("messages").add(messageData).await()
-            true
-        } catch (e: Exception) {
-            Log.e("SocialRepository", "Error sending message", e)
-            false
-        }
-    }
-
     fun getRealtimeMessagesFlow(startTime: Date): Flow<List<ChatMessage>> = callbackFlow {
         val query = db.collection("messages")
             .whereGreaterThan("timestamp", com.google.firebase.Timestamp(startTime))
