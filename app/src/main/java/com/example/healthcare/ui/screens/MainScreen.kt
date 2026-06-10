@@ -226,7 +226,7 @@ fun MainHealthSpectrumScreen(
             TopSpectrumBanner(
                 score = healthState.getHealthScore(),
                 message = healthState.getHealthFeedback(),
-                onClick = { onNavigateToDetail("종합 점수") }
+                onClick = { /* 클릭 이벤트 비활성화 */ }
             )
 
             Text(
