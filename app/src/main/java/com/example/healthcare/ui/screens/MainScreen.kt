@@ -87,24 +87,34 @@ fun MainHealthSpectrumScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = PermissionController.createRequestPermissionResultContract()
     ) { grantedPermissions ->
-        if (grantedPermissions.containsAll(healthPermissions)) {
-            coroutineScope.launch {
-                isApiSyncing = true
-                if (healthConnectClient != null) {
+        coroutineScope.launch {
+            isApiSyncing = true
+            if (healthConnectClient != null) {
+                // 수면 권한이 있는 경우에만 업데이트
+                if (grantedPermissions.contains(HealthPermission.getReadPermission(SleepSessionRecord::class))) {
                     val sleepHistory = getHistoricalSleep(healthConnectClient, 35)
                     sleepHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "수면", value) }
+                }
 
+                // 활동 권한이 있는 경우에만 업데이트
+                val activePermissions = setOf(
+                    HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+                    HealthPermission.getReadPermission(StepsRecord::class)
+                )
+                if (grantedPermissions.containsAll(activePermissions)) {
                     val activeTimeHistory = getHistoricalActiveTime(healthConnectClient, 35)
                     activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "활동시간", value) }
                 }
+            }
+            
+            // 스크린 타임은 Health Connect와 별개이므로 권한 확인 후 업데이트
+            if (checkUsageStatsPermission(context)) {
                 val screenTimeHistory = getHistoricalScreenTime(context, 35)
                 screenTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
-
-                HealthWidget.updateAllWidgets(context)
-                isApiSyncing = false
             }
-        } else {
-            Toast.makeText(context, "건강 데이터 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show()
+
+            HealthWidget.updateAllWidgets(context)
+            isApiSyncing = false
         }
     }
 
@@ -136,34 +146,64 @@ fun MainHealthSpectrumScreen(
                     IconButton(
                         onClick = {
                             coroutineScope.launch {
-                                if (!checkUsageStatsPermission(context)) {
+                                val hasScreenPermission = checkUsageStatsPermission(context)
+                                if (!hasScreenPermission) {
                                     Toast.makeText(context, "스크린 타임을 측정하려면 '사용 정보 접근' 권한이 필요합니다.", Toast.LENGTH_LONG).show()
                                     context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                                    return@launch
+                                    // 스크린 타임 권한이 없어도 다른 데이터 동기화는 계속 진행할 수 있음
                                 }
+
                                 if (healthConnectClient == null) {
                                     Toast.makeText(context, "기기에 Health Connect 앱이 설치되어 있지 않습니다.", Toast.LENGTH_SHORT).show()
+                                    // Health Connect가 없어도 스크린 타임은 업데이트 시도
+                                    if (hasScreenPermission) {
+                                        isApiSyncing = true
+                                        val screenTimeHistory = getHistoricalScreenTime(context, 35)
+                                        screenTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
+                                        HealthWidget.updateAllWidgets(context)
+                                        isApiSyncing = false
+                                    }
                                     return@launch
                                 }
 
                                 val granted = healthConnectClient.permissionController.getGrantedPermissions()
-                                if (granted.containsAll(healthPermissions)) {
+                                
+                                // 필요한 권한 중 하나라도 없는 경우 권한 요청 화면을 먼저 띄움
+                                if (!granted.containsAll(healthPermissions)) {
+                                    permissionLauncher.launch(healthPermissions)
+                                } else {
+                                    // 모든 권한이 이미 있다면 즉시 동기화
                                     isApiSyncing = true
-                                    val sleepHistory = getHistoricalSleep(healthConnectClient, 35)
-                                    sleepHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "수면", value) }
-                                    val activeTimeHistory = getHistoricalActiveTime(healthConnectClient, 35)
-                                    activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "활동시간", value) }
-                                    val screenTimeHistory = getHistoricalScreenTime(context, 35)
-                                    screenTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
+                                    
+                                    // 수면 권한 체크
+                                    if (granted.contains(HealthPermission.getReadPermission(SleepSessionRecord::class))) {
+                                        val sleepHistory = getHistoricalSleep(healthConnectClient, 35)
+                                        sleepHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "수면", value) }
+                                    }
+                                    
+                                    // 활동 권한 체크
+                                    val activePermissions = setOf(
+                                        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+                                        HealthPermission.getReadPermission(StepsRecord::class)
+                                    )
+                                    if (granted.containsAll(activePermissions)) {
+                                        val activeTimeHistory = getHistoricalActiveTime(healthConnectClient, 35)
+                                        activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "활동시간", value) }
+                                    }
+
+                                    // 스크린 타임 체크
+                                    if (hasScreenPermission) {
+                                        val screenTimeHistory = getHistoricalScreenTime(context, 35)
+                                        screenTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
+                                    }
                                     
                                     HealthWidget.updateAllWidgets(context)
                                     isApiSyncing = false
-                                } else {
-                                    permissionLauncher.launch(healthPermissions)
                                 }
                             }
                         }
-                    ) {
+                    )
+{
                         if (isApiSyncing) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                         } else {
