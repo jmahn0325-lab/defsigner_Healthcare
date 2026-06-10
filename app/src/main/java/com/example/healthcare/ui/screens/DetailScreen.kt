@@ -680,10 +680,19 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                             } else ""
                                             
                                             Text(
-                                                text = "기록: $intakeText$penaltyLabel",
+                                                text = "기록: $intakeText",
                                                 fontSize = 12.sp,
-                                                color = if (detail.isOverThreshold && itemName != "수면") Color(0xFFD32F2F) else Color.Gray
+                                                color = Color.Gray
                                             )
+                                            
+                                            if (penaltyLabel.isNotEmpty()) {
+                                                Text(
+                                                    text = penaltyLabel.trim(),
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (itemName == "수면" || itemName == "활동시간") Color.Gray else Color(0xFFD32F2F)
+                                                )
+                                            }
                                         }
                                         Text(
                                             text = String.format("%.2f점", detail.currentPenalty),
