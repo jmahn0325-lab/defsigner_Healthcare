@@ -41,7 +41,13 @@ object NudgeMessageProvider {
     )
 
     fun getTitle(senderName: String, type: NudgeType): String {
-        return "${senderName}님에게 콕 찌르기(${type.factorName})가 왔습니다"
+        val action = when (type) {
+            NudgeType.Alcohol -> "드셨나요?"
+            NudgeType.Caffeine -> "섭취하셨나요?"
+            NudgeType.Smoking -> "하셨나요?"
+            else -> "하셨나요?"
+        }
+        return "${senderName}님이 콕 찔렀습니다. \"${type.factorName} $action\""
     }
 
     fun getRandomBody(type: NudgeType): String {

@@ -342,9 +342,8 @@ class SocialRepository {
             // 2. 실제 푸시 알림 발송을 위한 대기열(Queue) 등록
             val receiverToken = getUserFcmToken(receiverId)
             if (receiverToken != null) {
-                // 요구사항에 맞춘 타이틀 구성: "A님에게 콕 찌르기(항목이름)가 왔습니다"
-                val notificationTitle = "${senderName}님에게 콕 찌르기(${factor})가 왔습니다"
                 val nudgeType = NudgeType.fromString(factor)
+                val notificationTitle = NudgeMessageProvider.getTitle(senderName, nudgeType)
                 
                 val notificationData = mapOf(
                     "to" to receiverToken,

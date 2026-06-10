@@ -622,17 +622,13 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                             } else {
                                                 val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
                                                 val formattedValue = if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동시간") {
-                                                    if (itemName == "활동시간") {
-                                                        val totalMinutes = (detail.originalValue * 60).roundToInt()
-                                                        val h = totalMinutes / 60
-                                                        val m = totalMinutes % 60
-                                                        when {
-                                                            h > 0 && m > 0 -> "${h}시간 ${m}분"
-                                                            h > 0 -> "${h}시간"
-                                                            else -> "${m}분"
-                                                        }
-                                                    } else {
-                                                        String.format(java.util.Locale.getDefault(), "%.1f", detail.originalValue)
+                                                    val totalMinutes = (detail.originalValue * 60).roundToInt()
+                                                    val h = totalMinutes / 60
+                                                    val m = totalMinutes % 60
+                                                    when {
+                                                        h > 0 && m > 0 -> "${h}시간 ${m}분"
+                                                        h > 0 -> "${h}시간"
+                                                        else -> "${m}분"
                                                     }
                                                 } else "${detail.originalValue.toInt()}"
                                                 "$formattedValue$unitInDetail"

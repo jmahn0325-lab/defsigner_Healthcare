@@ -232,11 +232,27 @@ fun MainHealthSpectrumScreen(
                 }
 
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HealthApiRecord("🌙", "수면", String.format(Locale.getDefault(), "%.1f시간", healthState.getTodayValue("수면")), progress = healthState.getTodayValue("수면") / healthState.sleepTarget.coerceAtLeast(1f), Color(0xFF673AB7), onClick = { onNavigateToDetail("수면") })
+                    val sleepTime = healthState.getTodayValue("수면")
+                    val sHours = sleepTime.toInt()
+                    val sMinutes = ((sleepTime - sHours) * 60).roundToInt()
+                    val sleepDisplay = when {
+                        sHours > 0 && sMinutes > 0 -> "${sHours}시간 ${sMinutes}분"
+                        sHours > 0 -> "${sHours}시간"
+                        else -> "${sMinutes}분"
+                    }
+                    HealthApiRecord("🌙", "수면", sleepDisplay, progress = sleepTime / healthState.sleepTarget.coerceAtLeast(1f), Color(0xFF673AB7), onClick = { onNavigateToDetail("수면") })
                 }
             }
 
-            HealthApiRecord("📱", "스크린 타임", String.format(Locale.getDefault(), "%.1f시간", healthState.getTodayValue("스크린 타임")), progress = healthState.getTodayValue("스크린 타임") / healthState.screenTimeTarget.coerceAtLeast(1f), Color(0xFF2196F3), onClick = { onNavigateToDetail("스크린 타임") })
+            val screenTime = healthState.getTodayValue("스크린 타임")
+            val scHours = screenTime.toInt()
+            val scMinutes = ((screenTime - scHours) * 60).roundToInt()
+            val screenDisplay = when {
+                scHours > 0 && scMinutes > 0 -> "${scHours}시간 ${scMinutes}분"
+                scHours > 0 -> "${scHours}시간"
+                else -> "${scMinutes}분"
+            }
+            HealthApiRecord("📱", "스크린 타임", screenDisplay, progress = screenTime / healthState.screenTimeTarget.coerceAtLeast(1f), Color(0xFF2196F3), onClick = { onNavigateToDetail("스크린 타임") })
 
             
             Spacer(modifier = Modifier.height(32.dp))
