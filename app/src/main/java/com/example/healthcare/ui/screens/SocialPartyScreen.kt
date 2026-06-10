@@ -384,20 +384,16 @@ fun LeaderboardItem(rank: Int, member: UserScore, isMe: Boolean, onClick: () -> 
                 contentAlignment = Alignment.Center
             ) {
                 if (rank <= 3) {
-                    Surface(
-                        shape = CircleShape,
-                        color = rankColor,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = rank.toString(),
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 14.sp,
-                                color = Color.White
-                            )
-                        }
+                    val medalEmoji = when(rank) {
+                        1 -> "🥇"
+                        2 -> "🥈"
+                        3 -> "🥉"
+                        else -> ""
                     }
+                    Text(
+                        text = medalEmoji,
+                        fontSize = 24.sp
+                    )
                 } else {
                     Text(
                         text = rank.toString(),
@@ -500,7 +496,7 @@ fun MemberDetailDialog(
                                         Icon(
                                             Icons.Default.NotificationsActive,
                                             contentDescription = "콕 찌르기",
-                                            tint = if (score < -10) Color.Red else Color.Gray
+                                            tint = Color.Red
                                         )
                                     }
                                 }
