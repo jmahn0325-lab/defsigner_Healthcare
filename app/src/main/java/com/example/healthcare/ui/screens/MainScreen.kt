@@ -237,7 +237,7 @@ fun MainHealthSpectrumScreen(
                 modifier = Modifier.padding(top = 8.dp)
             )
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val alcoholCups = healthState.getTodayValue("알코올") / healthState.selectedAlcoholType.content
                     HealthInputSlider("🍶", "알코올", healthState.selectedAlcoholType.unit, value = alcoholCups, maxValue = healthState.alcoholTarget,
@@ -260,7 +260,7 @@ fun MainHealthSpectrumScreen(
                 modifier = Modifier.padding(top = 8.dp)
             )
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val activeTime = healthState.getTodayValue("활동 시간")
                     val hours = activeTime.toInt()

@@ -108,37 +108,52 @@ fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: 
 
     OutlinedCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        modifier = Modifier.size(32.dp),
-                        shape = CircleShape,
-                        color = color.copy(alpha = 0.1f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(text = emoji, fontSize = 16.sp)
-                        }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(28.dp),
+                    shape = CircleShape,
+                    color = color.copy(alpha = 0.1f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(text = emoji, fontSize = 14.sp)
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 }
-                Text(text = "${value.toInt()}$valueSuffix", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = color)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "${value.toInt()}$valueSuffix", 
+                style = MaterialTheme.typography.titleMedium, 
+                fontWeight = FontWeight.ExtraBold, 
+                color = color
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
             LinearProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
                 color = color,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
+            
             Spacer(modifier = Modifier.height(6.dp))
-            Text(text = "목표: ${maxValue.toInt()}$valueSuffix", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.align(Alignment.End))
+            
+            Text(
+                text = "목표: ${maxValue.toInt()}$valueSuffix", 
+                style = MaterialTheme.typography.labelSmall, 
+                color = MaterialTheme.colorScheme.outline, 
+                modifier = Modifier.align(Alignment.End)
+            )
         }
     }
 }
@@ -147,32 +162,39 @@ fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: 
 fun HealthApiRecord(emoji: String, title: String, value: String, progress: Float, color: Color, onClick: () -> Unit = {}) {
     OutlinedCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        modifier = Modifier.size(32.dp),
-                        shape = CircleShape,
-                        color = color.copy(alpha = 0.1f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(text = emoji, fontSize = 16.sp)
-                        }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(28.dp),
+                    shape = CircleShape,
+                    color = color.copy(alpha = 0.1f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(text = emoji, fontSize = 14.sp)
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 }
-                Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = value, 
+                style = MaterialTheme.typography.titleMedium, 
+                fontWeight = FontWeight.ExtraBold
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
             LinearProgressIndicator(
                 progress = { progress.coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
                 color = color,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
