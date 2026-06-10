@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -358,23 +359,55 @@ fun PartyItem(party: Party, displayName: String, onEdit: () -> Unit, onClick: ()
 
 @Composable
 fun LeaderboardItem(rank: Int, member: UserScore, isMe: Boolean, onClick: () -> Unit) {
+    val rankColor = when (rank) {
+        1 -> Color(0xFFFFD700) // Gold
+        2 -> Color(0xFFC0C0C0) // Silver
+        3 -> Color(0xFFCD7F32) // Bronze
+        else -> MaterialTheme.colorScheme.primary
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         color = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (rank <= 3) 2.dp else 1.dp,
+            color = if (rank <= 3) rankColor else Color.LightGray
+        )
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = rank.toString(),
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 18.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.width(32.dp)
-            )
+            Box(
+                modifier = Modifier.width(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (rank <= 3) {
+                    Surface(
+                        shape = CircleShape,
+                        color = rankColor,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = rank.toString(),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 14.sp,
+                                color = Color.White
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = rank.toString(),
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = member.displayName, fontWeight = FontWeight.Bold)
                 if (member.bio.isNotBlank()) {
