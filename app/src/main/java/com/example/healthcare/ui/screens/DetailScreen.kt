@@ -656,7 +656,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                                 "${detail.itemName} ${countStr}${detail.unit} / ${detail.originalValue.toInt()}$contentUnit"
                                             } else {
                                                 val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
-                                                val formattedValue = if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동시간") {
+                                                if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동시간") {
                                                     val totalMinutes = (detail.originalValue * 60).roundToInt()
                                                     val h = totalMinutes / 60
                                                     val m = totalMinutes % 60
@@ -665,8 +665,9 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                                         h > 0 -> "${h}시간"
                                                         else -> "${m}분"
                                                     }
-                                                } else "${detail.originalValue.toInt()}"
-                                                "$formattedValue$unitInDetail"
+                                                } else {
+                                                    "${detail.originalValue.toInt()}$unitInDetail"
+                                                }
                                             }
                                             
                                             val penaltyLabel = if (detail.isOverThreshold) {
