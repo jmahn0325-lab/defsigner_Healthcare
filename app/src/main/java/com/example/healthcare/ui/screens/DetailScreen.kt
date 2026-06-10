@@ -67,7 +67,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         if (selectedUnit == "잔") alternativeUnit else selectedUnit
     } else when (itemName) {
         "흡연" -> "개비"
-        "수면", "활동시간", "스크린 타임" -> "시간"
+        "수면", "활동 시간", "스크린 타임" -> "시간"
         else -> "단위"
     }
 
@@ -77,7 +77,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
     val targetMax = when (itemName) {
         "수면", "스크린 타임" -> 24f
-        "활동시간" -> 5f // 활동시간 최대 목표치를 5시간으로 조정 (현실적 범위)
+        "활동 시간" -> 5f // 활동 시간 최대 목표치를 5시간으로 조정 (현실적 범위)
         "흡연" -> 26f
         "알코올" -> 24f
         "카페인" -> 30f
@@ -90,7 +90,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         "흡연" -> healthState.smokingTarget
         "카페인" -> healthState.caffeineTarget
         "수면" -> healthState.sleepTarget
-        "활동시간" -> healthState.activityTarget
+        "활동 시간" -> healthState.activityTarget
         "스크린 타임" -> healthState.screenTimeTarget
         else -> 0f
     }
@@ -106,7 +106,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             "흡연" -> healthState.smokingTarget = internalVal
             "카페인" -> healthState.caffeineTarget = internalVal
             "수면" -> healthState.sleepTarget = internalVal
-            "활동시간" -> healthState.activityTarget = internalVal
+            "활동 시간" -> healthState.activityTarget = internalVal
             "스크린 타임" -> healthState.screenTimeTarget = internalVal
         }
     }
@@ -120,7 +120,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         rawAbsoluteValue
     }
     val isManualInput = itemName in listOf("알코올", "흡연", "카페인", "수면")
-    val hasPenaltyDetails = itemName in listOf("알코올", "흡연", "카페인", "수면", "스크린 타임", "활동시간")
+    val hasPenaltyDetails = itemName in listOf("알코올", "흡연", "카페인", "수면", "스크린 타임", "활동 시간")
 
     var tempDisplayValue by remember(displayCurrentValue, selectedUnit) { mutableFloatStateOf(displayCurrentValue) }
     val hasSliderChanges = tempDisplayValue > displayCurrentValue + 0.001f
@@ -542,7 +542,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 Text(text = "현재 기록된 수치 (자동 연동)", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
                 Spacer(modifier = Modifier.height(8.dp))
                 Box(modifier = Modifier.fillMaxWidth().background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp)).padding(16.dp), contentAlignment = Alignment.Center) {
-                    val formattedVal = if (itemName == "활동시간" || itemName == "스크린 타임") {
+                    val formattedVal = if (itemName == "활동 시간" || itemName == "스크린 타임") {
                         val totalMinutes = (displayCurrentValue * 60).roundToInt()
                         val h = totalMinutes / 60
                         val m = totalMinutes % 60
@@ -554,7 +554,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     } else {
                         String.format(java.util.Locale.getDefault(), "%.1f", displayCurrentValue)
                     }
-                    Text(text = "$formattedVal ${if (itemName == "활동시간" || itemName == "스크린 타임") "" else displayUnit}", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "$formattedVal ${if (itemName == "활동 시간" || itemName == "스크린 타임") "" else displayUnit}", fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -589,7 +589,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            val isHigherBetter = itemName in listOf("활동시간", "수면")
+            val isHigherBetter = itemName in listOf("활동 시간", "수면")
             HealthBarChart(
                 data = chartData,
                 isWeekly = selectedPeriod == "기간(주)",
@@ -612,7 +612,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 val penaltyDetails = healthState.getPenaltyDetails(itemName).reversed()
                 
                 // key(healthState.activityTarget)를 사용하여 Recomposition 유도
-                key(if (itemName == "활동시간") healthState.activityTarget else 0f) {
+                key(if (itemName == "활동 시간") healthState.activityTarget else 0f) {
                     if (penaltyDetails.isEmpty()) {
                         Text(text = "기록된 데이터가 없습니다.", color = Color.Gray, modifier = Modifier.padding(vertical = 16.dp))
                     } else {
@@ -656,7 +656,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                                 "${detail.itemName} ${countStr}${detail.unit} / ${detail.originalValue.toInt()}$contentUnit"
                                             } else {
                                                 val unitInDetail = if (isConvertible) convertibleUnit else displayUnit
-                                                if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동시간") {
+                                                if (itemName == "수면" || itemName == "스크린 타임" || itemName == "활동 시간") {
                                                     val totalMinutes = (detail.originalValue * 60).roundToInt()
                                                     val h = totalMinutes / 60
                                                     val m = totalMinutes % 60
@@ -673,7 +673,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                             val penaltyLabel = if (detail.isOverThreshold) {
                                                 when (itemName) {
                                                     "수면" -> " (수면 부족 💤)"
-                                                    "활동시간" -> " (활동 부족 🏃)"
+                                                    "활동 시간" -> " (활동 부족 🏃)"
                                                     "스크린 타임" -> ""
                                                     else -> " (폭주 페널티 🔥)"
                                                 }
@@ -690,7 +690,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                                     text = penaltyLabel.trim(),
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = if (itemName == "수면" || itemName == "활동시간") Color.Gray else Color(0xFFD32F2F)
+                                                    color = if (itemName == "수면" || itemName == "활동 시간") Color.Gray else Color(0xFFD32F2F)
                                                 )
                                             }
                                         }
@@ -772,7 +772,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                             "카페인" -> "($genderStr 기준) 24시간 내에 연속적으로 카페인을 ${if (healthState.gender == "Female") 300 else 400}mg 이상 섭취하면 '폭주 패널티'가 적용되어 초과분에 대한 감점이 2배로 늘어납니다."
                             "수면" -> "오늘, 어제, 그저께의 수면 시간을 0.5:0.3:0.2 비율로 가중 합산하여 7시간(만점 기준) 미만일 경우 점수가 계산됩니다. 꾸준한 수면 습관이 중요합니다."
                             "스크린 타임" -> "설정한 목표 시간을 초과하여 전자기기를 사용할 경우, 초과된 시간(1시간당 -1점)만큼 건강 점수에서 감점됩니다."
-                            "활동시간" -> "활동시간이 목표 시간(ActiveGoals)에 미달할 경우, 부족한 시간당 -3점(분당 -0.05점)의 감점이 적용됩니다. 공식: [-3.0 × (ActiveGoals(분) - 활동시간(분)) / 60]"
+                            "활동 시간" -> "활동 시간이 목표 시간(ActiveGoals)에 미달할 경우, 부족한 시간당 -3점(분당 -0.05점)의 감점이 적용됩니다. 공식: [-3.0 × (ActiveGoals(분) - 활동 시간(분)) / 60]"
                             else -> "해당 항목의 기록 수치가 건강 점수에 실시간으로 반영됩니다."
                         }
                         Surface(
@@ -796,7 +796,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            if (!isManualInput) {
+            if (!isManualInput || itemName == "수면") {
                 Text(text = "목표 $itemName 설정 (메인 화면 최대치 연동)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 
@@ -833,7 +833,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     modifier = Modifier.fillMaxWidth()
                 )
                 
-                val formattedTarget = if (itemName == "활동시간") {
+                val formattedTarget = if (itemName == "활동 시간") {
                     val hours = targetValue.toInt()
                     val minutes = ((targetValue - hours) * 60).roundToInt()
                     when {
@@ -844,7 +844,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 } else {
                     String.format(java.util.Locale.getDefault(), "%.1f", targetValue)
                 }
-                Text(text = "$formattedTarget ${if (itemName == "활동시간") "" else displayUnit}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(text = "$formattedTarget ${if (itemName == "활동 시간") "" else displayUnit}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(32.dp))

@@ -179,7 +179,7 @@ class HealthState private constructor(private val context: Context?) {
             // (수면 점수 가중치 평균을 위해 최근 3일치가 중요함)
             if (i <= 2) {
                 _records.add(HealthRecord(date = date, hour = null, type = "수면", value = 7.0f)) // 이 수식에서 7시간이 만점 기준
-                _records.add(HealthRecord(date = date, hour = null, type = "활동시간", value = activityTarget))
+                _records.add(HealthRecord(date = date, hour = null, type = "활동 시간", value = activityTarget))
                 _records.add(HealthRecord(date = date, hour = null, type = "스크린 타임", value = screenTimeTarget))
                 _records.add(HealthRecord(date = date, hour = null, type = "걸음수", value = 10000f))
                 // 수동 입력 항목은 0으로 설정하여 감점 방지
@@ -189,7 +189,7 @@ class HealthState private constructor(private val context: Context?) {
             } else {
                 // 그 외 과거 데이터는 차트를 위해 랜덤 생성
                 _records.add(HealthRecord(date = date, hour = null, type = "수면", value = (5..8).random().toFloat()))
-                _records.add(HealthRecord(date = date, hour = null, type = "활동시간", value = (1..3).random().toFloat()))
+                _records.add(HealthRecord(date = date, hour = null, type = "활동 시간", value = (1..3).random().toFloat()))
                 _records.add(HealthRecord(date = date, hour = null, type = "스크린 타임", value = (3..7).random().toFloat()))
                 _records.add(HealthRecord(date = date, hour = 12, type = "알코올", value = (0..2).random().toFloat() * 5f))
                 _records.add(HealthRecord(date = date, hour = 15, type = "흡연", value = (0..3).random().toFloat()))
@@ -337,7 +337,7 @@ class HealthState private constructor(private val context: Context?) {
         var score = 100f
         
         // 자동 측정 항목 및 수동 입력 항목 감점
-        val activityPenalty = getTotalCurrentPenalty("활동시간")
+        val activityPenalty = getTotalCurrentPenalty("활동 시간")
         val alcoholPenalty = getTotalCurrentPenalty("알코올")
         val smokePenalty = getTotalCurrentPenalty("흡연")
         val caffeinePenalty = getTotalCurrentPenalty("카페인")
@@ -375,7 +375,7 @@ class HealthState private constructor(private val context: Context?) {
 
         // 5. 스크린 타임 & 활동하기: 최근 1일 (사용자 설정 목표 G 기준)
         val screenTime = getTodayValue("스크린 타임")
-        val activityTime = getTodayValue("활동시간")
+        val activityTime = getTodayValue("활동 시간")
 
         // 6. 폭주 패널티 이력 확인 (최근 24시간 이내)
         val bingeCheckTime = LocalDateTime.now().minusDays(1)
@@ -383,7 +383,7 @@ class HealthState private constructor(private val context: Context?) {
 
         val factors = listOf(
             HealthFactor(HealthFactorType.SLEEP, weightedSleep, 8.0f, hasRecentBinge("수면")),
-            HealthFactor(HealthFactorType.ACTIVITY, activityTime, activityTarget, hasRecentBinge("활동시간")),
+            HealthFactor(HealthFactorType.ACTIVITY, activityTime, activityTarget, hasRecentBinge("활동 시간")),
             HealthFactor(HealthFactorType.SCREEN_TIME, screenTime, screenTimeTarget, hasRecentBinge("스크린 타임")),
             HealthFactor(HealthFactorType.ALCOHOL, alcoholSum, alcoholThreshold, hasRecentBinge("알코올")),
             HealthFactor(HealthFactorType.SMOKING, smokingSum, smokingThreshold, hasRecentBinge("흡연")),
@@ -692,8 +692,8 @@ class HealthState private constructor(private val context: Context?) {
     }
 
     fun getTotalCurrentPenalty(type: String): Float {
-        if (type == "활동시간") {
-            val h = getTodayValue("활동시간") * 60f // 현재 활동 시간 (분)
+        if (type == "활동 시간") {
+            val h = getTodayValue("활동 시간") * 60f // 현재 활동 시간 (분)
             val target = activityTarget * 60f // 목표 활동 시간 (분)
             // 공식: -3.0 * (ActiveGoals(분) - H(분)) / 60
             // 즉, 부족한 시간당 -3점 감점 (분당 -0.05점)
@@ -720,9 +720,9 @@ class HealthState private constructor(private val context: Context?) {
     }
 
     fun getPenaltyDetails(type: String): List<PenaltyDetail> {
-        if (type == "활동시간") {
-            val h = getTodayValue("활동시간")
-            val penalty = getTotalCurrentPenalty("활동시간")
+        if (type == "활동 시간") {
+            val h = getTodayValue("활동 시간")
+            val penalty = getTotalCurrentPenalty("활동 시간")
             return listOf(
                 PenaltyDetail(
                     dateTime = LocalDate.now().atTime(0, 0),

@@ -72,7 +72,7 @@ fun MainHealthSpectrumScreen(
                 "카페인" to healthState.getTotalCurrentPenalty("카페인"),
                 "흡연" to healthState.getTotalCurrentPenalty("흡연"),
                 "수면" to healthState.getTotalCurrentPenalty("수면"),
-                "활동시간" to healthState.getTotalCurrentPenalty("활동시간"),
+                "활동 시간" to healthState.getTotalCurrentPenalty("활동 시간"),
                 "스크린 타임" to healthState.getTotalCurrentPenalty("스크린 타임")
             )
         )
@@ -81,7 +81,7 @@ fun MainHealthSpectrumScreen(
     val healthPermissions = setOf(
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-        HealthPermission.getReadPermission(StepsRecord::class), // 활동시간 계산을 위해 필요함
+        HealthPermission.getReadPermission(StepsRecord::class), // 활동 시간 계산을 위해 필요함
     )
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -103,7 +103,7 @@ fun MainHealthSpectrumScreen(
                 )
                 if (grantedPermissions.containsAll(activePermissions)) {
                     val activeTimeHistory = getHistoricalActiveTime(healthConnectClient, 35)
-                    activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "활동시간", value) }
+                    activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "활동 시간", value) }
                 }
             }
             
@@ -188,7 +188,7 @@ fun MainHealthSpectrumScreen(
                                     )
                                     if (granted.containsAll(activePermissions)) {
                                         val activeTimeHistory = getHistoricalActiveTime(healthConnectClient, 35)
-                                        activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "활동시간", value) }
+                                        activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "활동 시간", value) }
                                     }
 
                                     // 스크린 타임 체크
@@ -260,7 +260,7 @@ fun MainHealthSpectrumScreen(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val activeTime = healthState.getTodayValue("활동시간")
+                    val activeTime = healthState.getTodayValue("활동 시간")
                     val hours = activeTime.toInt()
                     val minutes = ((activeTime - hours) * 60).roundToInt()
                     val activeDisplay = when {
@@ -268,7 +268,7 @@ fun MainHealthSpectrumScreen(
                         hours > 0 -> "${hours}시간"
                         else -> "${minutes}분"
                     }
-                    HealthApiRecord("🧍", "활동시간", activeDisplay, progress = activeTime / healthState.activityTarget.coerceAtLeast(0.1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("활동시간") })
+                    HealthApiRecord("🧍", "활동 시간", activeDisplay, progress = activeTime / healthState.activityTarget.coerceAtLeast(0.1f), Color(0xFFFF9800), onClick = { onNavigateToDetail("활동 시간") })
                 }
 
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
