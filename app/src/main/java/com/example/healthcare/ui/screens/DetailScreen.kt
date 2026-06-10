@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import com.example.healthcare.data.HealthState
 import com.example.healthcare.data.BeverageType
-import com.example.healthcare.ui.components.CustomBarChart
+import com.example.healthcare.ui.components.HealthBarChart
 import com.example.healthcare.widget.HealthWidget
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -555,7 +555,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
             Spacer(modifier = Modifier.height(24.dp))
             val isHigherBetter = itemName in listOf("활동시간", "수면")
-            CustomBarChart(
+            HealthBarChart(
                 data = chartData,
                 isWeekly = selectedPeriod == "기간(주)",
                 modifier = Modifier.fillMaxWidth().height(250.dp),

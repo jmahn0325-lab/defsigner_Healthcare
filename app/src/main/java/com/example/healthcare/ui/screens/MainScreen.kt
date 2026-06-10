@@ -29,7 +29,10 @@ import androidx.health.connect.client.records.StepsRecord
 import com.example.healthcare.data.HealthState
 import com.example.healthcare.data.SocialRepository
 import com.example.healthcare.ui.components.*
-import com.example.healthcare.utils.*
+import com.example.healthcare.utils.getHistoricalActiveTime
+import com.example.healthcare.utils.getHistoricalScreenTime
+import com.example.healthcare.utils.getHistoricalSleep
+import com.example.healthcare.utils.checkUsageStatsPermission
 import com.example.healthcare.widget.HealthWidget
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -88,14 +91,14 @@ fun MainHealthSpectrumScreen(
             coroutineScope.launch {
                 isApiSyncing = true
                 if (healthConnectClient != null) {
-                    val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
-                    sleepHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "수면", value) }
+                    val sleepHistory = getHistoricalSleep(healthConnectClient, 35)
+                    sleepHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "수면", value) }
 
-                    val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
-                    activeTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "활동시간", value) }
+                    val activeTimeHistory = getHistoricalActiveTime(healthConnectClient, 35)
+                    activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "활동시간", value) }
                 }
-                val screenTimeHistory = fetchHistoricalScreenTime(context, 35)
-                screenTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
+                val screenTimeHistory = getHistoricalScreenTime(context, 35)
+                screenTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
 
                 HealthWidget.updateAllWidgets(context)
                 isApiSyncing = false
@@ -133,7 +136,7 @@ fun MainHealthSpectrumScreen(
                     IconButton(
                         onClick = {
                             coroutineScope.launch {
-                                if (!hasUsageStatsPermission(context)) {
+                                if (!checkUsageStatsPermission(context)) {
                                     Toast.makeText(context, "스크린 타임을 측정하려면 '사용 정보 접근' 권한이 필요합니다.", Toast.LENGTH_LONG).show()
                                     context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                                     return@launch
@@ -146,12 +149,12 @@ fun MainHealthSpectrumScreen(
                                 val granted = healthConnectClient.permissionController.getGrantedPermissions()
                                 if (granted.containsAll(healthPermissions)) {
                                     isApiSyncing = true
-                                    val sleepHistory = fetchHistoricalSleep(healthConnectClient, 35)
-                                    sleepHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "수면", value) }
-                                    val activeTimeHistory = fetchHistoricalActiveTime(healthConnectClient, 35)
-                                    activeTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "활동시간", value) }
-                                    val screenTimeHistory = fetchHistoricalScreenTime(context, 35)
-                                    screenTimeHistory.forEach { (date: LocalDate, value: Float) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
+                                    val sleepHistory = getHistoricalSleep(healthConnectClient, 35)
+                                    sleepHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "수면", value) }
+                                    val activeTimeHistory = getHistoricalActiveTime(healthConnectClient, 35)
+                                    activeTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "활동시간", value) }
+                                    val screenTimeHistory = getHistoricalScreenTime(context, 35)
+                                    screenTimeHistory.forEach { (date, value) -> healthState.updateAutoRecord(date, "스크린 타임", value) }
                                     
                                     HealthWidget.updateAllWidgets(context)
                                     isApiSyncing = false
