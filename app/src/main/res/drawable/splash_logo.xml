@@ -11,10 +11,10 @@
         </shape>
     </item>
     <item
-        android:drawable="@drawable/ic_app_launcher_logo"
+        android:drawable="@mipmap/ic_launcher_foreground"
         android:gravity="center"
-        android:top="120dp"
-        android:bottom="120dp"
-        android:left="120dp"
-        android:right="120dp" />
+        android:top="100dp"
+        android:bottom="100dp"
+        android:left="100dp"
+        android:right="100dp" />
 </layer-list>
