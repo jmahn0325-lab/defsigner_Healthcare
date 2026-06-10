@@ -129,11 +129,9 @@ fun HealthBarChart(
                 }
             }
 
-            // 목표량 영역 강조 및 수치 표시
+            // 목표량 영역 강조 (배경)
             if (targetValue != null && targetValue > 0) {
                 val targetHeightFraction = (targetValue / maxDataValue).coerceIn(0f, 1f)
-                
-                // 1. 강조 배경 영역
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -142,8 +140,22 @@ fun HealthBarChart(
                         .padding(start = 48.dp, bottom = 20.dp)
                         .background(themeColor.copy(alpha = 0.12f))
                 )
-                
-                // 2. 목표선 및 수치 텍스트
+            }
+
+            Row(modifier = Modifier.fillMaxSize().padding(start = 48.dp, top = 24.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
+                data.forEach { (_, value) ->
+                    val heightFraction = (value / maxDataValue).coerceIn(0f, 1f)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom, modifier = Modifier.fillMaxHeight()) {
+                        Text(text = if (value == value.toInt().toFloat()) "${value.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", value), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 2.dp))
+                        Box(modifier = Modifier.width(if (isWeekly) 40.dp else 24.dp).fillMaxHeight(heightFraction.coerceAtLeast(0.01f)).background(Color(0xFFD2B48C), RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)).border(1.dp, Color.DarkGray, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+            }
+
+            // 목표 수치 및 선 표시 (막대 그래프보다 앞에 위치하도록 나중에 배치)
+            if (targetValue != null && targetValue > 0) {
+                val targetHeightFraction = (targetValue / maxDataValue).coerceIn(0f, 1f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -165,17 +177,6 @@ fun HealthBarChart(
                             .align(Alignment.TopStart)
                             .padding(start = 4.dp, top = 2.dp)
                     )
-                }
-            }
-
-            Row(modifier = Modifier.fillMaxSize().padding(start = 48.dp, top = 24.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
-                data.forEach { (_, value) ->
-                    val heightFraction = (value / maxDataValue).coerceIn(0f, 1f)
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom, modifier = Modifier.fillMaxHeight()) {
-                        Text(text = if (value == value.toInt().toFloat()) "${value.toInt()}" else String.format(java.util.Locale.getDefault(), "%.1f", value), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 2.dp))
-                        Box(modifier = Modifier.width(if (isWeekly) 40.dp else 24.dp).fillMaxHeight(heightFraction.coerceAtLeast(0.01f)).background(Color(0xFFD2B48C), RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)).border(1.dp, Color.DarkGray, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
                 }
             }
             Row(modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(start = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
