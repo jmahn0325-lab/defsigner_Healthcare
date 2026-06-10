@@ -55,3 +55,24 @@ data class PrivacySettings(
     val smokingVisible: Boolean = true,
     val healthVisible: Boolean = true // 수면, 활동량 등
 )
+
+/**
+ * 공용 채팅 메시지
+ */
+data class ChatMessage(
+    val senderId: String = "",
+    val text: String = "",
+    val timestamp: Timestamp? = null
+)
+
+/**
+ * 1:1 개인 쪽지 (mailbox)
+ */
+data class MailMessage(
+    val senderId: String = "",
+    val receiverId: String = "",
+    val title: String = "",
+    val body: String = "",
+    val action: String = "",
+    val timestamp: Timestamp? = null
+)

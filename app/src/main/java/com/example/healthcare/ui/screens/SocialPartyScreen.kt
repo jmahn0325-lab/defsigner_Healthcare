@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -33,7 +34,7 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
+fun SocialPartyScreen(myUid: String, onBack: () -> Unit, onNavigateToChat: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repository = remember { SocialRepository() }
@@ -84,6 +85,9 @@ fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
                         }
                         IconButton(onClick = { showJoinDialog = true }) {
                             Icon(Icons.Default.Group, contentDescription = "파티 참여")
+                        }
+                        IconButton(onClick = onNavigateToChat) {
+                            Icon(Icons.Default.Chat, contentDescription = "공용 채팅")
                         }
                     }
                 }
@@ -402,20 +406,40 @@ fun MemberDetailDialog(
                                         )
                                     }
                                     if (member.uid != myUid) {
-                                        IconButton(onClick = {
-                                            // 1. 클릭 즉시 발신자 화면에 Toast 표시
-                                            Toast.makeText(context, "${member.displayName}님에게 콕 찌르기(${factor})를 했습니다", Toast.LENGTH_SHORT).show()
-                                            
-                                            scope.launch {
-                                                // 2. 백엔드/클라우드 함수 트리거를 위한 데이터 기록
-                                                repository.sendNudge(myUid, member.uid, factor)
+                                        Row {
+                                            IconButton(onClick = {
+                                                Toast.makeText(context, "${member.displayName}님에게 쪽지를 보냈습니다.", Toast.LENGTH_SHORT).show()
+                                                scope.launch {
+                                                    // 요구사항 2: mailbox 컬렉션에 저장
+                                                    repository.sendPrivateMail(
+                                                        senderId = myUid,
+                                                        receiverId = member.uid,
+                                                        title = "콕 찌르기 ($factor)",
+                                                        body = "${factor} 섭취가 감지되었습니다. 주의하세요!",
+                                                        action = "OPEN_CHAT"
+                                                    )
+                                                }
+                                            }) {
+                                                Icon(
+                                                    Icons.Default.Chat,
+                                                    contentDescription = "쪽지 보내기",
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
                                             }
-                                        }) {
-                                            Icon(
-                                                Icons.Default.NotificationsActive,
-                                                contentDescription = "콕 찌르기",
-                                                tint = if (score < -10) Color.Red else Color.Gray
-                                            )
+
+                                            IconButton(onClick = {
+                                                // 기존 콕 찌르기 (Interactions/Notifications)
+                                                Toast.makeText(context, "${member.displayName}님에게 콕 찌르기(${factor})를 했습니다", Toast.LENGTH_SHORT).show()
+                                                scope.launch {
+                                                    repository.sendNudge(myUid, member.uid, factor)
+                                                }
+                                            }) {
+                                                Icon(
+                                                    Icons.Default.NotificationsActive,
+                                                    contentDescription = "콕 찌르기",
+                                                    tint = if (score < -10) Color.Red else Color.Gray
+                                                )
+                                            }
                                         }
                                     }
                                 }

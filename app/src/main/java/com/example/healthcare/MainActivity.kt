@@ -1,12 +1,15 @@
 package com.example.healthcare
 
+import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.example.healthcare.data.FCMTokenManager
@@ -14,6 +17,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.healthcare.data.HealthState
+import com.example.healthcare.ui.screens.ChatScreen
 import com.example.healthcare.ui.screens.DetailScreen
 import com.example.healthcare.ui.screens.MainHealthSpectrumScreen
 import com.example.healthcare.ui.screens.OnboardingScreen
@@ -25,10 +29,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // FCM 토큰 갱신 및 업데이트
-        FCMTokenManager.updateTokenForCurrentUser()
+        // 기기 ID 기반 userId 획득
+        val healthState = HealthState.getInstance(this)
+        
+        // FCM 토큰 갱신 및 업데이트 (요구사항 1)
+        FCMTokenManager.updateTokenForUser(healthState.userId)
+
+        // 인텐트 처리 (요구사항 4)
+        handleIntent(intent)
 
         setContent {
+            // 앱이 켜져 있는 동안 플래그 설정
+            LaunchedEffect(Unit) {
+                MyFirebaseMessagingService.isAppInForeground = true
+            }
+            
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -37,6 +52,31 @@ class MainActivity : ComponentActivity() {
                     HealthApp()
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        MyFirebaseMessagingService.isAppInForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        MyFirebaseMessagingService.isAppInForeground = false
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        intent?.let { handleIntent(it) }
+    }
+
+    private fun handleIntent(intent: android.content.Intent) {
+        val action = intent.getStringExtra("action") ?: return
+        val senderId = intent.getStringExtra("senderId") ?: ""
+        
+        // 특정 액션에 따른 로직 수행
+        if (action == "OPEN_CHAT") {
+            Toast.makeText(this, "$senderId 님과의 채팅을 엽니다.", Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -85,9 +125,13 @@ fun HealthApp() {
         }
         composable("social") {
             SocialPartyScreen(
-                myUid = healthState.userId, // HealthState에 userId가 있다고 가정하거나 Onboarding에서 저장된 값 사용
-                onBack = { navController.popBackStack() }
+                myUid = healthState.userId,
+                onBack = { navController.popBackStack() },
+                onNavigateToChat = { navController.navigate("chat") }
             )
+        }
+        composable("chat") {
+            ChatScreen(onBack = { navController.popBackStack() })
         }
         composable("settings") {
             SettingsScreen(
