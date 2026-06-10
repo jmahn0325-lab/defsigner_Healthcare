@@ -114,16 +114,20 @@ fun HealthApp() {
     NavHost(navController = navController, startDestination = startDestination) {
         composable("nameSetting") {
             UserNameSettingScreen(healthState = healthState) {
-                navController.navigate("onboarding") {
-                    popUpTo("nameSetting") { inclusive = true }
-                }
+                // 사용자 정보를 받은 후 앱 재시작 (FCM 토큰 갱신 보장)
+                val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                val mainIntent = Intent.makeRestartActivityTask(intent?.component)
+                context.startActivity(mainIntent)
+                Runtime.getRuntime().exit(0)
             }
         }
         composable("onboarding") {
             OnboardingUserScreen(healthState = healthState) {
-                navController.navigate("main") {
-                    popUpTo("onboarding") { inclusive = true }
-                }
+                // 사용자 정보를 받은 후 앱 재시작 (FCM 토큰 갱신 보장)
+                val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                val mainIntent = Intent.makeRestartActivityTask(intent?.component)
+                context.startActivity(mainIntent)
+                Runtime.getRuntime().exit(0)
             }
         }
         composable("main") {
