@@ -138,6 +138,9 @@ class HealthState private constructor(private val context: Context?) {
         }
     var screenTimeTarget by mutableFloatStateOf(6f)
 
+    // 로컬 파티 별명 관리를 위한 관찰 가능한 맵
+    private val _localPartyNames = androidx.compose.runtime.mutableStateMapOf<String, String>()
+
     // 알코올 및 카페인 종류 리스트 (초기 단위 설정)
     val alcoholTypes = mutableStateListOf(
         BeverageType("소주", 6.3f, "잔"),
@@ -627,6 +630,22 @@ class HealthState private constructor(private val context: Context?) {
 
     fun saveSelection(type: String, name: String) {
         prefs?.edit()?.putString("selection_$type", name)?.apply()
+    }
+
+    fun saveLocalPartyName(partyId: String, name: String) {
+        val trimmedName = name.trim()
+        if (trimmedName.isEmpty()) {
+            // 공백만 입력 시 로컬 별명 삭제 -> 기본 이름으로 복구
+            _localPartyNames.remove(partyId)
+            prefs?.edit()?.remove("party_name_$partyId")?.apply()
+        } else {
+            _localPartyNames[partyId] = trimmedName
+            prefs?.edit()?.putString("party_name_$partyId", trimmedName)?.apply()
+        }
+    }
+
+    fun getLocalPartyName(partyId: String, defaultName: String): String {
+        return _localPartyNames[partyId] ?: prefs?.getString("party_name_$partyId", defaultName) ?: defaultName
     }
 
     fun saveProfile() {

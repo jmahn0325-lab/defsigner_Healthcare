@@ -140,7 +140,7 @@ fun HealthApp() {
         }
         composable("social") {
             SocialPartyScreen(
-                myUid = healthState.userId,
+                healthState = healthState,
                 onBack = { navController.popBackStack() }
             )
         }

@@ -34,7 +34,8 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
+fun SocialPartyScreen(healthState: HealthState, onBack: () -> Unit) {
+    val myUid = healthState.userId
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repository = remember { SocialRepository() }
@@ -62,10 +63,12 @@ fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { 
-                    Text(
-                        text = if (viewingParty != null) viewingParty!!.partyName else "소셜 파티", 
-                        fontWeight = FontWeight.Bold 
-                    ) 
+                    val title = if (viewingParty != null) {
+                        healthState.getLocalPartyName(viewingParty!!.partyId, viewingParty!!.partyName)
+                    } else {
+                        "소셜 파티"
+                    }
+                    Text(text = title, fontWeight = FontWeight.Bold) 
                 },
                 navigationIcon = {
                     IconButton(onClick = {
@@ -115,11 +118,13 @@ fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         itemsIndexed(myParties) { _, party ->
+                            val localName = healthState.getLocalPartyName(party.partyId, party.partyName)
                             PartyItem(
                                 party = party,
+                                displayName = localName,
                                 onEdit = { 
                                     showEditDialog = party
-                                    editNameInput = party.partyName
+                                    editNameInput = localName
                                 },
                                 onClick = {
                                     viewingParty = party
@@ -232,13 +237,9 @@ fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
             },
             confirmButton = {
                 Button(onClick = {
-                    scope.launch {
-                        val success = repository.updatePartyName(showEditDialog!!.partyId, editNameInput)
-                        if (success) {
-                            Toast.makeText(context, "이름이 수정되었습니다.", Toast.LENGTH_SHORT).show()
-                        }
-                        showEditDialog = null
-                    }
+                    healthState.saveLocalPartyName(showEditDialog!!.partyId, editNameInput)
+                    Toast.makeText(context, "별명이 수정되었습니다.", Toast.LENGTH_SHORT).show()
+                    showEditDialog = null
                 }) { Text("수정") }
             },
             dismissButton = {
@@ -259,7 +260,7 @@ fun SocialPartyScreen(myUid: String, onBack: () -> Unit) {
 }
 
 @Composable
-fun PartyItem(party: Party, onEdit: () -> Unit, onClick: () -> Unit) {
+fun PartyItem(party: Party, displayName: String, onEdit: () -> Unit, onClick: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
@@ -273,7 +274,7 @@ fun PartyItem(party: Party, onEdit: () -> Unit, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = party.partyName, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(text = displayName, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(onClick = onEdit, modifier = Modifier.size(24.dp)) {
                         Icon(Icons.Default.Edit, contentDescription = "이름 수정", tint = Color.Gray, modifier = Modifier.size(16.dp))
