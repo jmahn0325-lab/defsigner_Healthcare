@@ -91,7 +91,7 @@ fun HealthApiRecord(emoji: String, title: String, value: String, progress: Float
 }
 
 @Composable
-fun CustomBarChart(
+fun HealthBarChart(
     data: List<Pair<String, Float>>,
     isWeekly: Boolean,
     modifier: Modifier = Modifier,

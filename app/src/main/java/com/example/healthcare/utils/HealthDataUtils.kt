@@ -16,7 +16,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-suspend fun fetchHistoricalActiveTime(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
+suspend fun getHistoricalActiveTime(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
     val map = mutableMapOf<LocalDate, Float>()
     try {
         val zoneId = ZoneId.systemDefault()
@@ -88,7 +88,7 @@ suspend fun fetchHistoricalActiveTime(client: HealthConnectClient, days: Int): M
     return map
 }
 
-suspend fun fetchHistoricalSleep(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
+suspend fun getHistoricalSleep(client: HealthConnectClient, days: Int): Map<LocalDate, Float> {
     val map = mutableMapOf<LocalDate, Float>()
     try {
         val zoneId = ZoneId.systemDefault()
@@ -125,7 +125,7 @@ suspend fun fetchHistoricalSleep(client: HealthConnectClient, days: Int): Map<Lo
     return map
 }
 
-fun fetchHistoricalScreenTime(context: Context, days: Int): Map<LocalDate, Float> {
+fun getHistoricalScreenTime(context: Context, days: Int): Map<LocalDate, Float> {
     val map = mutableMapOf<LocalDate, Float>()
     try {
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
@@ -208,7 +208,7 @@ fun fetchHistoricalScreenTime(context: Context, days: Int): Map<LocalDate, Float
     return map
 }
 
-fun hasUsageStatsPermission(context: Context): Boolean {
+fun checkUsageStatsPermission(context: Context): Boolean {
     val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
     val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
         appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)

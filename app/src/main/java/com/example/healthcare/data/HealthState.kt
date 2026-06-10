@@ -175,23 +175,23 @@ class HealthState private constructor(private val context: Context?) {
             // 오늘(0)부터 최근 2일까지는 100점을 위해 '완벽한' 데이터 입력
             // (수면 점수 가중치 평균을 위해 최근 3일치가 중요함)
             if (i <= 2) {
-                _records.add(HealthRecord(date, null, "수면", 7.0f)) // 이 수식에서 7시간이 만점 기준
-                _records.add(HealthRecord(date, null, "활동시간", activityTarget))
-                _records.add(HealthRecord(date, null, "스크린 타임", screenTimeTarget))
-                _records.add(HealthRecord(date, null, "걸음수", 10000f))
+                _records.add(HealthRecord(date = date, hour = null, type = "수면", value = 7.0f)) // 이 수식에서 7시간이 만점 기준
+                _records.add(HealthRecord(date = date, hour = null, type = "활동시간", value = activityTarget))
+                _records.add(HealthRecord(date = date, hour = null, type = "스크린 타임", value = screenTimeTarget))
+                _records.add(HealthRecord(date = date, hour = null, type = "걸음수", value = 10000f))
                 // 수동 입력 항목은 0으로 설정하여 감점 방지
-                _records.add(HealthRecord(date, 12, "알코올", 0f))
-                _records.add(HealthRecord(date, 12, "흡연", 0f))
-                _records.add(HealthRecord(date, 12, "카페인", 0f))
+                _records.add(HealthRecord(date = date, hour = 12, type = "알코올", value = 0f))
+                _records.add(HealthRecord(date = date, hour = 12, type = "흡연", value = 0f))
+                _records.add(HealthRecord(date = date, hour = 12, type = "카페인", value = 0f))
             } else {
                 // 그 외 과거 데이터는 차트를 위해 랜덤 생성
-                _records.add(HealthRecord(date, null, "수면", (5..8).random().toFloat()))
-                _records.add(HealthRecord(date, null, "활동시간", (1..3).random().toFloat()))
-                _records.add(HealthRecord(date, null, "스크린 타임", (3..7).random().toFloat()))
-                _records.add(HealthRecord(date, 12, "알코올", (0..2).random().toFloat() * 5f))
-                _records.add(HealthRecord(date, 15, "흡연", (0..3).random().toFloat()))
-                _records.add(HealthRecord(date, 10, "카페인", (0..2).random().toFloat() * 100f))
-                _records.add(HealthRecord(date, null, "걸음수", (3000..12000).random().toFloat()))
+                _records.add(HealthRecord(date = date, hour = null, type = "수면", value = (5..8).random().toFloat()))
+                _records.add(HealthRecord(date = date, hour = null, type = "활동시간", value = (1..3).random().toFloat()))
+                _records.add(HealthRecord(date = date, hour = null, type = "스크린 타임", value = (3..7).random().toFloat()))
+                _records.add(HealthRecord(date = date, hour = 12, type = "알코올", value = (0..2).random().toFloat() * 5f))
+                _records.add(HealthRecord(date = date, hour = 15, type = "흡연", value = (0..3).random().toFloat()))
+                _records.add(HealthRecord(date = date, hour = 10, type = "카페인", value = (0..2).random().toFloat() * 100f))
+                _records.add(HealthRecord(date = date, hour = null, type = "걸음수", value = (3000..12000).random().toFloat()))
             }
         }
     }
@@ -344,7 +344,7 @@ class HealthState private constructor(private val context: Context?) {
         // score += penalty 인 이유는 각 Penalty 메서드가 음수(감점)를 반환하기 때문입니다.
         score += (activityPenalty + alcoholPenalty + smokePenalty + caffeinePenalty + sleepPenalty + screenPenalty)
         
-        return Math.round(score).toInt().coerceIn(0, 100)
+        return Math.round(score).coerceIn(0, 100)
     }
 
     // 가장 감점이 큰 요소를 찾아 맞춤형 피드백을 제공합니다. (세부 기준 및 시나리오 반영)
@@ -626,7 +626,7 @@ class HealthState private constructor(private val context: Context?) {
     // --- 추가된 메서드들 ---
 
     fun saveSelection(type: String, name: String) {
-        prefs?.edit()?.putString("selection_$type", name)?.commit()
+        prefs?.edit()?.putString("selection_$type", name)?.apply()
     }
 
     fun saveProfile() {

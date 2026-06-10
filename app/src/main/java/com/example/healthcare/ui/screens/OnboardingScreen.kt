@@ -12,7 +12,7 @@ import com.example.healthcare.data.HealthState
 import androidx.compose.ui.tooling.preview.Preview
 
 @Composable
-fun OnboardingScreen(healthState: HealthState, onComplete: () -> Unit) {
+fun OnboardingUserScreen(healthState: HealthState, onComplete: () -> Unit) {
     var selectedGender by remember { mutableStateOf("Male") }
 
     Column(
@@ -78,6 +78,6 @@ fun OnboardingScreen(healthState: HealthState, onComplete: () -> Unit) {
 @Composable
 fun OnboardingScreenPreview() {
     MaterialTheme {
-        OnboardingScreen(healthState = HealthState.getInstance(null), onComplete = {})
+        OnboardingUserScreen(healthState = HealthState.getInstance(null), onComplete = {})
     }
 }

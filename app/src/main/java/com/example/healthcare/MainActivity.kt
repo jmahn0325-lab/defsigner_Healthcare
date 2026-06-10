@@ -13,16 +13,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.example.healthcare.data.FCMTokenManager
+import com.example.healthcare.data.HealthState
+import com.example.healthcare.ui.screens.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.healthcare.data.HealthState
-import com.example.healthcare.ui.screens.DetailScreen
-import com.example.healthcare.ui.screens.MainHealthSpectrumScreen
-import com.example.healthcare.ui.screens.OnboardingScreen
-import com.example.healthcare.ui.screens.SettingsScreen
-import com.example.healthcare.ui.screens.SocialPartyScreen
-import com.example.healthcare.ui.screens.UserNameSettingScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,7 +64,7 @@ class MainActivity : ComponentActivity() {
         intent?.let { handleIntent(it) }
     }
 
-    private fun handleIntent(intent: android.content.Intent) {
+    private fun handleIntent(intent: Intent) {
         val action = intent.getStringExtra("action") ?: return
         val senderId = intent.getStringExtra("senderId") ?: ""
         
@@ -95,24 +90,18 @@ fun HealthApp() {
 
     NavHost(navController = navController, startDestination = startDestination) {
         composable("nameSetting") {
-            UserNameSettingScreen(
-                healthState = healthState,
-                onComplete = {
-                    navController.navigate("onboarding") {
-                        popUpTo("nameSetting") { inclusive = true }
-                    }
+            UserNameSettingScreen(healthState = healthState) {
+                navController.navigate("onboarding") {
+                    popUpTo("nameSetting") { inclusive = true }
                 }
-            )
+            }
         }
         composable("onboarding") {
-            OnboardingScreen(
-                healthState = healthState,
-                onComplete = {
-                    navController.navigate("main") {
-                        popUpTo("onboarding") { inclusive = true }
-                    }
+            OnboardingUserScreen(healthState = healthState) {
+                navController.navigate("main") {
+                    popUpTo("onboarding") { inclusive = true }
                 }
-            )
+            }
         }
         composable("main") {
             MainHealthSpectrumScreen(
