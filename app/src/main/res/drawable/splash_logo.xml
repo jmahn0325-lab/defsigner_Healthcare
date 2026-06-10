@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Splash Screen Logo.
-  The system masks this icon in a circle.
-  By setting small or negative margins, we ensure the white part of the
-  logo fills the circle, effectively hiding the black corners of the PNG.
+  실행 화면의 원형 마스킹 영역 안에서 로고의 테두리가 잘리지 않고
+  전체 모습이 온전히 보이도록 여백(120dp)을 충분히 확보했습니다.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
@@ -12,10 +11,10 @@
         </shape>
     </item>
     <item
-        android:drawable="@drawable/app_logo"
+        android:drawable="@drawable/ic_app_launcher_logo"
         android:gravity="center"
-        android:top="0dp"
-        android:bottom="0dp"
-        android:left="0dp"
-        android:right="0dp" />
+        android:top="120dp"
+        android:bottom="120dp"
+        android:left="120dp"
+        android:right="120dp" />
 </layer-list>

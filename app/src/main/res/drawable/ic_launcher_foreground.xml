@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Adaptive Icon Foreground.
-  Using negative margins to "zoom in" on the logo and push the black edges
-  of the PNG outside the visible mask area.
+  파일명 ic_app_launcher_logo.png 를 참조하도록 수정했습니다.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item
-        android:drawable="@drawable/app_logo"
+        android:drawable="@drawable/ic_app_launcher_logo"
         android:gravity="center"
-        android:top="-18dp"
-        android:bottom="-18dp"
-        android:left="-18dp"
-        android:right="-18dp" />
+        android:top="2dp"
+        android:bottom="2dp"
+        android:left="2dp"
+        android:right="2dp" />
 </layer-list>
