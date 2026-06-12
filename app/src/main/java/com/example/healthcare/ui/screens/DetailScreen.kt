@@ -100,7 +100,8 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     val displayTargetValue: Float? = if (itemName in listOf("알코올", "흡연", "카페인")) null else effectiveTargetValue
 
     val onTargetChange: (Float) -> Unit = { newVal ->
-        val internalVal = newVal / multiplier
+        // 입력받은 값을 해당 항목의 최대 허용치(targetMax) 내로 제한합니다. (시간 항목의 경우 최대 24시간)
+        val internalVal = (newVal / multiplier).coerceIn(0f, targetMax)
         when (itemName) {
             "알코올" -> healthState.alcoholTarget = internalVal
             "흡연" -> healthState.smokingTarget = internalVal
