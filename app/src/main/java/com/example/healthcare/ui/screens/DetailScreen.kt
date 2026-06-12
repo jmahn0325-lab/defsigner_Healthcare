@@ -402,7 +402,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 val isSmoking = itemName == "흡연"
                 val isGlassUnit = isConvertible && selectedUnit == "잔"
                 val isContinuousUnit = isConvertible && (selectedUnit == "g" || selectedUnit == "mg")
-                val showManualInput = !isSmoking && !isGlassUnit
+                val showManualInput = isSmoking || !isGlassUnit
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(text = "오늘의 $itemName 기록 입력", fontSize = 14.sp, color = Color.Gray)
