@@ -56,6 +56,8 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
     var newTypeName by remember { mutableStateOf("") }
     var newTypeContent by remember { mutableStateOf("") }
     var newTypeUnit by remember { mutableStateOf("") }
+    var alcoholVolumeInput by remember { mutableStateOf("") }
+    var alcoholAbvInput by remember { mutableStateOf("") }
 
     val selectedType = if (itemName == "알코올") healthState.selectedAlcoholType else healthState.selectedCaffeineType
     val isConvertible = itemName in listOf("알코올", "카페인")
@@ -180,7 +182,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                     fontWeight = if (type == selectedType) FontWeight.Bold else FontWeight.Normal,
                                     color = if (type == selectedType) MaterialTheme.colorScheme.primary else Color.Black
                                 )
-                                Text(text = "1 ${type.unit}당 $itemName ${type.content}$contentUnit", fontSize = 12.sp, color = Color.Gray)
+                                val description = if (itemName == "알코올" && type.volume != null && type.abv != null) {
+                                    val volStr = if (type.volume == type.volume.toInt().toFloat()) "${type.volume.toInt()}" else "${type.volume}"
+                                    val abvStr = if (type.abv == type.abv.toInt().toFloat()) "${type.abv.toInt()}" else "${type.abv}"
+                                    "1 ${type.unit}당 ${volStr}ml, ${abvStr}도"
+                                } else {
+                                    "1 ${type.unit}당 $itemName ${type.content}$contentUnit"
+                                }
+                                Text(text = description, fontSize = 12.sp, color = Color.Gray)
                             }
                             Row {
                                 IconButton(onClick = { 
@@ -188,6 +197,8 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                                     newTypeName = type.name
                                     newTypeContent = type.content.toString()
                                     newTypeUnit = type.unit
+                                    alcoholVolumeInput = type.volume?.let { if (it == it.toInt().toFloat()) "${it.toInt()}" else "$it" } ?: ""
+                                    alcoholAbvInput = type.abv?.let { if (it == it.toInt().toFloat()) "${it.toInt()}" else "$it" } ?: ""
                                     showAddTypeDialog = true 
                                 }) {
                                     Icon(Icons.Default.Edit, contentDescription = "수정", tint = Color.Gray)
@@ -209,7 +220,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { showAddTypeDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { 
+                        newTypeName = ""
+                        newTypeContent = ""
+                        newTypeUnit = ""
+                        alcoholVolumeInput = ""
+                        alcoholAbvInput = ""
+                        showAddTypeDialog = true 
+                    }, modifier = Modifier.fillMaxWidth()) {
                         Text("새 종류 추가")
                     }
                 }
@@ -229,29 +247,79 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
             title = { Text(text = if (isEditing) "$itemName 수정" else "새로운 $itemName 추가", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    OutlinedTextField(value = newTypeName, onValueChange = { newTypeName = it }, label = { Text("제품명 (예: 아메리카노)") })
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val fieldLabel = if (itemName == "알코올") "섭취당 알코올 함량" else "섭취당 카페인 함량"
                     OutlinedTextField(
-                        value = newTypeContent,
-                        onValueChange = { newTypeContent = it },
-                        label = { Text("$fieldLabel ($contentUnit)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        value = newTypeName, 
+                        onValueChange = { newTypeName = it }, 
+                        label = { Text("제품명 (예: ${if (itemName == "알코올") "참이슬" else "아메리카노"})") },
+                        modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    if (itemName == "알코올") {
+                        OutlinedTextField(
+                            value = alcoholVolumeInput,
+                            onValueChange = { alcoholVolumeInput = it },
+                            label = { Text("용량 (ml)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = alcoholAbvInput,
+                            onValueChange = { alcoholAbvInput = it },
+                            label = { Text("도수 (%)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        val vol = alcoholVolumeInput.toFloatOrNull() ?: 0f
+                        val abv = alcoholAbvInput.toFloatOrNull() ?: 0f
+                        val calculatedGrams = vol * (abv / 100f) * 0.789f
+                        if (vol > 0 && abv > 0) {
+                            Text(
+                                text = String.format(java.util.Locale.getDefault(), "계산된 알코올 함량: %.2fg", calculatedGrams),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    } else {
+                        val fieldLabel = "섭취당 카페인 함량"
+                        OutlinedTextField(
+                            value = newTypeContent,
+                            onValueChange = { newTypeContent = it },
+                            label = { Text("$fieldLabel ($contentUnit)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = newTypeUnit,
                         onValueChange = { newTypeUnit = it },
-                        label = { Text("단위 (예: 잔, 캔, 병)") }
+                        label = { Text("단위 (예: ${if (itemName == "알코올") "잔, 병" else "잔, 캔"})") },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val content = newTypeContent.toFloatOrNull() ?: 1f
+                    val vol = alcoholVolumeInput.toFloatOrNull()
+                    val abv = alcoholAbvInput.toFloatOrNull()
+                    
+                    val content = if (itemName == "알코올") {
+                        (vol ?: 0f) * ((abv ?: 0f) / 100f) * 0.789f
+                    } else {
+                        newTypeContent.toFloatOrNull() ?: 1f
+                    }
+
                     val unit = newTypeUnit.ifBlank { "단위" }
                     val types = if (itemName == "알코올") healthState.alcoholTypes else healthState.caffeineTypes
-                    val newType = BeverageType(newTypeName, content, unit)
+                    val newType = if (itemName == "알코올") {
+                        BeverageType(newTypeName, content, unit, vol, abv)
+                    } else {
+                        BeverageType(newTypeName, content, unit)
+                    }
                     
                     if (isEditing) {
                         val index = types.indexOf(editingType)

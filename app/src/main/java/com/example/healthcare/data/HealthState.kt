@@ -31,8 +31,14 @@ data class HealthRecord(
     val isBinge: Boolean = false // 추가: 폭주 패널티 여부 저장
 )
 
-// 제품 종류 정보를 저장하는 데이터 클래스 (단위 unit 추가)
-data class BeverageType(val name: String, val content: Float, val unit: String)
+// 제품 종류 정보를 저장하는 데이터 클래스 (단위 unit 추가, 알코올의 경우 용량/도수 추가)
+data class BeverageType(
+    val name: String,
+    val content: Float,
+    val unit: String,
+    val volume: Float? = null,
+    val abv: Float? = null
+)
 
 // 감점 상세 정보를 저장하는 데이터 클래스
 data class PenaltyDetail(
@@ -143,9 +149,9 @@ class HealthState private constructor(private val context: Context?) {
 
     // 알코올 및 카페인 종류 리스트 (초기 단위 설정)
     val alcoholTypes = mutableStateListOf(
-        BeverageType("소주", 6.3f, "잔"),
-        BeverageType("맥주", 7.1f, "잔"),
-        BeverageType("와인", 15.4f, "잔")
+        BeverageType("소주", 6.5f, "잔", 50f, 16.5f),
+        BeverageType("맥주", 7.1f, "잔", 200f, 4.5f),
+        BeverageType("와인", 15.4f, "잔", 150f, 13f)
     )
     val caffeineTypes = mutableStateListOf(
         BeverageType("아메리카노", 150f, "잔"),
