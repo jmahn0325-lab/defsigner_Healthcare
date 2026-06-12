@@ -486,17 +486,26 @@ fun MemberDetailDialog(
                                     )
                                 }
                                 if (member.uid != myUid) {
-                                    IconButton(onClick = {
-                                        // 콕 찌르기 (Interactions/Notifications)
-                                        Toast.makeText(context, "${member.displayName}님에게 콕 찌르기(${factor})를 했습니다", Toast.LENGTH_SHORT).show()
-                                        scope.launch {
-                                            repository.sendNudge(myUid, member.uid, factor)
+                                    val canNudge = NudgeManager.canNudge(member.uid, factor)
+                                    IconButton(
+                                        onClick = {
+                                            if (canNudge) {
+                                                Toast.makeText(context, "${member.displayName}님에게 콕 찌르기(${factor})를 했습니다", Toast.LENGTH_SHORT).show()
+                                                scope.launch {
+                                                    val success = repository.sendNudge(myUid, member.uid, factor)
+                                                    if (success) {
+                                                        NudgeManager.recordNudge(member.uid, factor)
+                                                    }
+                                                }
+                                            } else {
+                                                Toast.makeText(context, "해당 항목은 시간당 5회까지만 콕 찌를 수 있습니다.", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
-                                    }) {
+                                    ) {
                                         Icon(
                                             Icons.Default.TouchApp,
                                             contentDescription = "콕 찌르기",
-                                            tint = Color.Red
+                                            tint = if (canNudge) Color.Red else Color.Gray
                                         )
                                     }
                                 }
