@@ -163,8 +163,11 @@ class HealthState private constructor(private val context: Context?) {
 
     init {
         loadSelections()
-        createDummyData() // 실행 시마다 항상 100점으로 시작하는 더미 데이터 생성
-        saveToStorage()
+        // 저장된 데이터가 있으면 불러오고, 없으면 더미 데이터를 생성합니다.
+        if (!loadFromStorage()) {
+            createDummyData()
+            saveToStorage()
+        }
     }
 
     private fun createDummyData() {
@@ -689,6 +692,15 @@ class HealthState private constructor(private val context: Context?) {
         caffeineTarget = prefs?.getFloat("caffeineTarget", 30f) ?: 30f
         sleepTarget = prefs?.getFloat("sleepTarget", 8f) ?: 8f
         screenTimeTarget = prefs?.getFloat("screenTimeTarget", 6f) ?: 6f
+
+        // 로컬 파티 별명 불러오기
+        _localPartyNames.clear()
+        prefs?.all?.forEach { (key, value) ->
+            if (key.startsWith("party_name_") && value is String) {
+                val partyId = key.substring("party_name_".length)
+                _localPartyNames[partyId] = value
+            }
+        }
     }
 
     fun getTotalCurrentPenalty(type: String): Float {
