@@ -18,8 +18,8 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -494,7 +494,7 @@ fun MemberDetailDialog(
                                         }
                                     }) {
                                         Icon(
-                                            Icons.Default.NotificationsActive,
+                                            Icons.Default.TouchApp,
                                             contentDescription = "콕 찌르기",
                                             tint = Color.Red
                                         )
