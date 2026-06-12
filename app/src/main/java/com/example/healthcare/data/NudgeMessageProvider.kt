@@ -41,13 +41,13 @@ object NudgeMessageProvider {
     )
 
     fun getTitle(senderName: String, type: NudgeType): String {
-        val action = when (type) {
-            NudgeType.Alcohol -> "드셨나요?"
-            NudgeType.Caffeine -> "섭취하셨나요?"
-            NudgeType.Smoking -> "하셨나요?"
-            else -> "하셨나요?"
+        val question = when (type) {
+            is NudgeType.Alcohol -> "알코올 드셨나요?"
+            is NudgeType.Caffeine -> "카페인 섭취하셨나요?"
+            is NudgeType.Smoking -> "흡연 하셨나요?"
+            else -> "${type.factorName} 하셨나요?"
         }
-        return "${senderName}님이 콕 찔렀습니다. \"${type.factorName} $action\""
+        return "${senderName}님이 콕 찔렀습니다. \"$question\""
     }
 
     fun getRandomBody(type: NudgeType): String {

@@ -114,15 +114,14 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
         }
     }
 
-    var targetInputText by remember(targetValue) { mutableStateOf(if (targetValue > 0) String.format(java.util.Locale.getDefault(), "%.1f", targetValue) else "") }
-
     val rawAbsoluteValue = healthState.getTodayValue(itemName)
     val displayCurrentValue = if (isConvertible && selectedUnit == "잔") {
         rawAbsoluteValue / selectedType.content
     } else {
         rawAbsoluteValue
     }
-    val isManualInput = itemName in listOf("알코올", "흡연", "카페인", "수면")
+    val isManualInput = itemName in listOf("알코올", "흡연", "카페인", "수면", "활동 시간", "스크린 타임")
+    val isTimeBased = itemName in listOf("수면", "활동 시간", "스크린 타임")
     val hasPenaltyDetails = itemName in listOf("알코올", "흡연", "카페인", "수면", "스크린 타임", "활동 시간")
 
     var tempDisplayValue by remember(displayCurrentValue, selectedUnit) { mutableFloatStateOf(displayCurrentValue) }
@@ -130,7 +129,9 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
     var showInputDialog by remember { mutableStateOf(false) }
     var manualInputText by remember { mutableStateOf("") }
-    
+    var manualHourInput by remember { mutableStateOf("") }
+    var manualMinuteInput by remember { mutableStateOf("") }
+
     var showPenaltyInfo by remember { mutableStateOf(false) }
 
     val rawChartData = healthState.getChartData(itemName, selectedPeriod.replace("기간", "단위"))
@@ -367,57 +368,94 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
 
     if (showInputDialog) {
         val isContinuousUnit = isConvertible && (selectedUnit == "g" || selectedUnit == "mg")
+        val isTimeInput = isTimeBased
         AlertDialog(
             onDismissRequest = { showInputDialog = false },
-            title = { Text(text = if (isContinuousUnit) "$itemName 섭취량 추가" else "$itemName 직접 입력", fontWeight = FontWeight.Bold) },
+            title = { Text(text = if (isContinuousUnit) "$itemName 섭취량 추가" else if (isTimeInput) "$itemName 시간 입력" else "$itemName 직접 입력", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     if (isContinuousUnit) {
                         Text(text = "현재 수치: ${displayCurrentValue.toInt()} $displayUnit", fontSize = 14.sp, color = Color.Gray)
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                    OutlinedTextField(
-                        value = manualInputText,
-                        onValueChange = { manualInputText = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        label = { Text(if (isContinuousUnit) "추가할 수량 ($displayUnit)" else "수치 ($displayUnit)") },
-                        singleLine = true
-                    )
+                    if (isTimeInput) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = manualHourInput,
+                                onValueChange = { manualHourInput = it.filter { c -> c.isDigit() } },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                label = { Text("시간") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedTextField(
+                                value = manualMinuteInput,
+                                onValueChange = { 
+                                    val filtered = it.filter { c -> c.isDigit() }
+                                    if (filtered.isEmpty() || (filtered.toIntOrNull() ?: 0) < 60) {
+                                        manualMinuteInput = filtered
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                label = { Text("분") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = manualInputText,
+                            onValueChange = { manualInputText = it },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            label = { Text(if (isContinuousUnit) "추가할 수량 ($displayUnit)" else "수치 ($displayUnit)") },
+                            singleLine = true
+                        )
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val parsedValue = manualInputText.toFloatOrNull()
-                    if (parsedValue != null) {
-                        val finalDisplayValue = if (isContinuousUnit) {
-                            displayCurrentValue + parsedValue
-                        } else {
-                            if (itemName == "수면") parsedValue // 수면은 입력한 값 그대로 적용 (덮어쓰기)
-                            else if (isManualInput) max(parsedValue.roundToInt().toFloat(), displayCurrentValue)
-                            else max(parsedValue, displayCurrentValue)
-                        }
-
-                        val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
+                    if (isTimeInput) {
+                        val hours = manualHourInput.toFloatOrNull() ?: 0f
+                        val minutes = manualMinuteInput.toFloatOrNull() ?: 0f
+                        val finalDisplayValue = hours + (minutes / 60f)
                         
-                        if (itemName == "수면") {
-                            // 수면은 자동 기록과 동일하게 전체 값을 덮어씌움
+                        if (itemName == "수면" || itemName == "활동 시간" || itemName == "스크린 타임") {
                             healthState.updateAutoRecord(LocalDate.now(), itemName, finalDisplayValue)
-                        } else if (isManualInput) {
-                            val now = LocalTime.now()
-                            healthState.updateManualRecord(
-                                LocalDate.now(), 
-                                now.hour,
-                                now.minute,
-                                now.second,
-                                itemName, 
-                                finalDisplayValue * displayToInternalMultiplier,
-                                if (isConvertible) selectedType.name else if (itemName == "흡연") "담배" else null,
-                                if (isConvertible) selectedType.unit else if (itemName == "흡연") "개비" else null
-                            )
                         } else {
-                            healthState.updateAutoRecord(LocalDate.now(), itemName, finalDisplayValue * displayToInternalMultiplier)
+                            // 다른 항목은 기존 로직 (여기선 해당 없음)
                         }
                         updateWidgets()
+                    } else {
+                        val parsedValue = manualInputText.toFloatOrNull()
+                        if (parsedValue != null) {
+                            val finalDisplayValue = if (isContinuousUnit) {
+                                displayCurrentValue + parsedValue
+                            } else {
+                                if (isManualInput) max(parsedValue.roundToInt().toFloat(), displayCurrentValue)
+                                else max(parsedValue, displayCurrentValue)
+                            }
+
+                            val displayToInternalMultiplier = if (isConvertible && selectedUnit == "잔") selectedType.content else 1f
+                            
+                            if (isManualInput) {
+                                val now = LocalTime.now()
+                                healthState.updateManualRecord(
+                                    LocalDate.now(), 
+                                    now.hour,
+                                    now.minute,
+                                    now.second,
+                                    itemName, 
+                                    finalDisplayValue * displayToInternalMultiplier,
+                                    if (isConvertible) selectedType.name else if (itemName == "흡연") "담배" else null,
+                                    if (isConvertible) selectedType.unit else if (itemName == "흡연") "개비" else null
+                                )
+                            } else {
+                                healthState.updateAutoRecord(LocalDate.now(), itemName, finalDisplayValue * displayToInternalMultiplier)
+                            }
+                            updateWidgets()
+                        }
                     }
                     showInputDialog = false
                 }) { Text("확인") }
@@ -497,7 +535,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 val sliderWeight = (dynamicSliderMax - displayCurrentValue).coerceAtLeast(0.01f)
                 val baseWeight = displayCurrentValue.coerceAtLeast(0.01f)
 
-                if (itemName != "수면") {
+                if (!isTimeBased) {
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (baseWeight > 0.01f) {
                             Box(
@@ -551,7 +589,13 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     val contentModifier = if (showManualInput) {
                         Modifier
                             .clickable {
-                                manualInputText = if (isContinuousUnit) "" else "${tempDisplayValue.toInt()}"
+                                if (isTimeBased) {
+                                    val totalMinutes = (displayCurrentValue * 60).roundToInt()
+                                    manualHourInput = "${totalMinutes / 60}"
+                                    manualMinuteInput = "${totalMinutes % 60}"
+                                } else {
+                                    manualInputText = if (isContinuousUnit) "" else "${tempDisplayValue.toInt()}"
+                                }
                                 showInputDialog = true
                             }
                             .background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp))
@@ -566,7 +610,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = contentModifier
                     ) {
-                        val formattedCurrent = if (itemName == "수면") {
+                        val formattedCurrent = if (isTimeBased) {
                             val totalMinutes = (displayCurrentValue * 60).roundToInt()
                             val h = totalMinutes / 60
                             val m = totalMinutes % 60
@@ -584,7 +628,7 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                         Text(text = formattedCurrent, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
                         if (hasSliderChanges) {
-                            val deltaText = if (itemName == "수면") {
+                            val deltaText = if (isTimeBased) {
                                 val totalMinutes = (delta * 60).roundToInt()
                                 val h = totalMinutes / 60
                                 val m = totalMinutes % 60
@@ -600,11 +644,11 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                             }
                             Text(text = deltaText, fontSize = 16.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
                         }
-                        Text(text = if (itemName == "수면") "" else " $displayUnit", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        Text(text = if (isTimeBased) "" else " $displayUnit", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                     }
 
-                    if (showManualInput || itemName == "수면") {
-                        Text(text = if (itemName == "수면") "수면 시간 직접 입력" else "섭취량 직접 입력", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+                    if (showManualInput || isTimeBased) {
+                        Text(text = if (isTimeBased) "$itemName 직접 입력" else "섭취량 직접 입력", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             } else {
@@ -869,24 +913,46 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                 Text(text = "목표 $itemName 설정 (메인 화면 최대치 연동)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // 직접 입력 필드
+                // 직접 입력 필드 (시간/분 분리)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
+                    val totalMinutes = (targetValue * 60).roundToInt()
+                    var hourPart by remember(targetValue) { mutableStateOf("${totalMinutes / 60}") }
+                    var minutePart by remember(targetValue) { mutableStateOf("${totalMinutes % 60}") }
+
                     OutlinedTextField(
-                        value = targetInputText,
+                        value = hourPart,
                         onValueChange = { 
-                            targetInputText = it
-                            val parsed = it.toFloatOrNull()
-                            if (parsed != null) {
-                                onTargetChange(parsed)
+                            val filtered = it.filter { c -> c.isDigit() }
+                            hourPart = filtered
+                            val h = filtered.toFloatOrNull() ?: 0f
+                            val m = minutePart.toFloatOrNull() ?: 0f
+                            onTargetChange(h + (m / 60f))
+                        },
+                        modifier = Modifier.width(100.dp),
+                        label = { Text("시간") },
+                        suffix = { Text("시") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    OutlinedTextField(
+                        value = minutePart,
+                        onValueChange = { 
+                            val filtered = it.filter { c -> c.isDigit() }
+                            if (filtered.isEmpty() || (filtered.toIntOrNull() ?: 0) < 60) {
+                                minutePart = filtered
+                                val h = hourPart.toFloatOrNull() ?: 0f
+                                val m = filtered.toFloatOrNull() ?: 0f
+                                onTargetChange(h + (m / 60f))
                             }
                         },
-                        modifier = Modifier.width(120.dp),
-                        label = { Text("목표값") },
-                        suffix = { Text(displayUnit) },
+                        modifier = Modifier.width(100.dp),
+                        label = { Text("분") },
+                        suffix = { Text("분") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true
                     )
@@ -902,18 +968,15 @@ fun DetailScreen(itemName: String, healthState: HealthState, onBack: () -> Unit)
                     modifier = Modifier.fillMaxWidth()
                 )
                 
-                val formattedTarget = if (itemName == "활동 시간") {
-                    val hours = targetValue.toInt()
-                    val minutes = ((targetValue - hours) * 60).roundToInt()
-                    when {
-                        hours > 0 && minutes > 0 -> "${hours}시간 ${minutes}분"
-                        hours > 0 -> "${hours}시간"
-                        else -> "${minutes}분"
-                    }
-                } else {
-                    String.format(java.util.Locale.getDefault(), "%.1f", targetValue)
+                val totalMinutes = (targetValue * 60).roundToInt()
+                val hours = totalMinutes / 60
+                val minutes = totalMinutes % 60
+                val formattedTarget = when {
+                    hours > 0 && minutes > 0 -> "${hours}시간 ${minutes}분"
+                    hours > 0 -> "${hours}시간"
+                    else -> "${minutes}분"
                 }
-                Text(text = "$formattedTarget ${if (itemName == "활동 시간") "" else displayUnit}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(text = formattedTarget, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(32.dp))

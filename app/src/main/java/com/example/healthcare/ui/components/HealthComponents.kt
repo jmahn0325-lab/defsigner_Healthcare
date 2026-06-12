@@ -149,7 +149,7 @@ fun HealthInputSlider(emoji: String, title: String, valueSuffix: String, value: 
             Spacer(modifier = Modifier.height(6.dp))
             
             Text(
-                text = "목표: ${maxValue.toInt()}$valueSuffix", 
+                text = "최대: ${maxValue.toInt()}$valueSuffix",
                 style = MaterialTheme.typography.labelSmall, 
                 color = MaterialTheme.colorScheme.outline, 
                 modifier = Modifier.align(Alignment.End)
